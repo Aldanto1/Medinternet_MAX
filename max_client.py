@@ -33,7 +33,12 @@ _TIMEOUT = aiohttp.ClientTimeout(total=60)
 
 
 class MaxAPIError(Exception):
-    """Ошибка обращения к MAX Bot API."""
+    """Ошибка обращения к MAX Bot API (с кодом HTTP для различения 403/429/...)."""
+
+    def __init__(self, status: int | None, message: str):
+        super().__init__(f"HTTP {status}: {message}" if status else message)
+        self.status = status
+        self.message = message
 
 
 class MaxClient:
@@ -73,7 +78,7 @@ class MaxClient:
         async with self._session.request(method, url, params=params, json=json) as resp:
             text = await resp.text()
             if resp.status >= 400:
-                raise MaxAPIError(f"{method} {path} -> HTTP {resp.status}: {text[:300]}")
+                raise MaxAPIError(resp.status, f"{method} {path}: {text[:300]}")
             if not text:
                 return {}
             try:
@@ -183,4 +188,30 @@ class MaxClient:
             return payload.get("token")
         except Exception as e:
             logger.warning("Не удалось загрузить изображение %s: %s", file_path, e)
+            return None
+
+    async def upload_media_token(self, kind: str, data: bytes, filename: str) -> str | None:
+        """Загружает медиа из байтов (kind: 'image' | 'file') -> token вложения.
+
+        Используется рассылкой CRM. При неудаче возвращает None.
+        """
+        assert self._session is not None
+        try:
+            up = await self._request("POST", "/uploads", params={"type": kind})
+            upload_url = up.get("url")
+            if not upload_url:
+                return None
+            form = aiohttp.FormData()
+            form.add_field("data", data, filename=filename or "file")
+            async with self._session.post(upload_url, data=form) as resp:
+                if resp.status >= 400:
+                    return None
+                payload = await resp.json(content_type=None)
+            photos = payload.get("photos") or {}
+            for meta in photos.values():
+                if meta.get("token"):
+                    return meta["token"]
+            return payload.get("token")
+        except Exception as e:
+            logger.warning("Не удалось загрузить медиа %s: %s", filename, e)
             return None

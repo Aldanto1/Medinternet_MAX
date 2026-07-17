@@ -11,6 +11,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 import ai_client
+import config
 import db
 import link_token
 from config import BOT_TOKEN, WEBAPP_HOST, WEBAPP_PORT, WEBAPP_VERSION, webapp_url
@@ -380,6 +381,22 @@ def build_app(client=None, bot_name: str = "") -> web.Application:
     app.router.add_post("/api/ai/message", handle_ai_message)
     app.router.add_post("/api/ai/message/stream", handle_ai_stream)
     app.router.add_post("/api/ai/reset", handle_ai_reset)
+
+    # CRM-панель рассылок под /crm (если заданы логин/пароль/JWT). Тот же сервис.
+    if config.crm_enabled():
+        import crm
+        crm.register_routes(app)
+
+        async def _crm_start(a):
+            if a.get("client") is not None:
+                await crm.start_worker(a["client"])
+                logger.info("CRM-панель доступна по адресу /crm")
+
+        async def _crm_stop(_a):
+            await crm.stop_worker()
+
+        app.on_startup.append(_crm_start)
+        app.on_cleanup.append(_crm_stop)
     return app
 
 

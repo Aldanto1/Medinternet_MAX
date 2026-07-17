@@ -81,6 +81,34 @@ async def init() -> None:
             )
             """
         )
+        # Служебная схема CRM-панели рассылок (создаётся автоматически, без ручной миграции).
+        await conn.execute("CREATE SCHEMA IF NOT EXISTS crm")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crm.blocked_users (
+                telegram_id BIGINT PRIMARY KEY,
+                blocked_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crm.broadcast_log (
+                id           BIGSERIAL PRIMARY KEY,
+                broadcast_id TEXT       NOT NULL,
+                telegram_id  BIGINT     NOT NULL,
+                status       TEXT       NOT NULL,   -- sent / failed / blocked / pending
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_broadcast_log_bid ON crm.broadcast_log (broadcast_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_broadcast_log_status "
+            "ON crm.broadcast_log (broadcast_id, status)"
+        )
 
 
 async def close() -> None:
@@ -262,3 +290,213 @@ async def delete_start_prompt(telegram_id: int) -> None:
         await conn.execute(
             "DELETE FROM start_prompts WHERE telegram_id = $1", telegram_id
         )
+
+
+# ============================================================================
+# CRM-панель рассылок: выборка получателей, карточка пользователя, лог рассылки.
+# Работает поверх того же пула и таблицы users (telegram_id хранит MAX user_id).
+# ============================================================================
+
+from datetime import date, datetime  # noqa: E402
+
+
+def _crm_parse_dt(value):
+    if isinstance(value, (date, datetime)):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return date.fromisoformat(value)
+
+
+def crm_build_where(filters: dict) -> tuple[str, list]:
+    """SQL WHERE + параметры по фильтрам сегмента (значения только в params).
+
+    Поддерживает: created_from/created_to, has_email, has_phone,
+    med_ids (мультивыбор), tg_ids (мультивыбор MAX ID — основной способ).
+    """
+    clauses: list[str] = []
+    params: list = []
+
+    def ph(value) -> str:
+        params.append(value)
+        return f"${len(params)}"
+
+    if filters.get("created_from"):
+        clauses.append(f"created_at >= {ph(_crm_parse_dt(filters['created_from']))}")
+    if filters.get("created_to"):
+        clauses.append(f"created_at <= {ph(_crm_parse_dt(filters['created_to']))}")
+    if filters.get("has_email") is True:
+        clauses.append("email IS NOT NULL AND email <> ''")
+    if filters.get("has_email") is False:
+        clauses.append("(email IS NULL OR email = '')")
+    if filters.get("has_phone") is True:
+        clauses.append("phone IS NOT NULL AND phone <> ''")
+    if filters.get("has_phone") is False:
+        clauses.append("(phone IS NULL OR phone = '')")
+
+    med_ids = filters.get("med_ids")
+    if med_ids:
+        ids = [int(m) for m in med_ids if str(m).lstrip("-").isdigit()]
+        if ids:
+            clauses.append(f"med_id = ANY({ph(ids)})")
+
+    tg_ids = filters.get("tg_ids")
+    if tg_ids:
+        ids = [int(t) for t in tg_ids if str(t).lstrip("-").isdigit()]
+        if ids:
+            clauses.append(f"telegram_id = ANY({ph(ids)})")
+
+    where = " AND ".join(clauses) if clauses else "TRUE"
+    return where, params
+
+
+def _crm_nick(row) -> str:
+    full_name = (row["full_name"] or "").strip()
+    if full_name:
+        return full_name
+    username = (row["username"] or "").strip()
+    if username:
+        return "@" + username
+    return "—"
+
+
+# Исключаем заблокировавших бота (им отправка невозможна)
+_CRM_NOT_BLOCKED = "telegram_id NOT IN (SELECT telegram_id FROM crm.blocked_users)"
+
+
+async def crm_count_users(filters: dict) -> int:
+    assert _pool is not None, "db.init() ещё не вызван"
+    where, params = crm_build_where(filters)
+    async with _pool.acquire() as conn:
+        return await conn.fetchval(
+            f"SELECT count(*) FROM public.users WHERE ({where}) AND {_CRM_NOT_BLOCKED}",
+            *params,
+        )
+
+
+async def crm_search_med_ids(query: str, limit: int = 15) -> list[int]:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT med_id FROM public.users "
+            "WHERE med_id IS NOT NULL AND CAST(med_id AS TEXT) LIKE $1 || '%' "
+            "ORDER BY med_id LIMIT $2",
+            query, limit,
+        )
+    return [r["med_id"] for r in rows]
+
+
+async def crm_list_med_ids(limit: int = 1000) -> list[int]:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT med_id FROM public.users WHERE med_id IS NOT NULL "
+            "ORDER BY med_id LIMIT $1",
+            limit,
+        )
+    return [r["med_id"] for r in rows]
+
+
+async def crm_list_users(limit: int = 1000) -> list[dict]:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT telegram_id, username, full_name FROM public.users "
+            "ORDER BY created_at DESC, telegram_id LIMIT $1",
+            limit,
+        )
+    return [{"id": r["telegram_id"], "nick": _crm_nick(r)} for r in rows]
+
+
+async def crm_search_users(query: str, limit: int = 15) -> list[dict]:
+    assert _pool is not None, "db.init() ещё не вызван"
+    like = "%" + query + "%"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT telegram_id, username, full_name FROM public.users "
+            "WHERE CAST(telegram_id AS TEXT) LIKE $1 || '%' "
+            "   OR username ILIKE $2 OR full_name ILIKE $2 "
+            "ORDER BY created_at DESC, telegram_id LIMIT $3",
+            query, like, limit,
+        )
+    return [{"id": r["telegram_id"], "nick": _crm_nick(r)} for r in rows]
+
+
+async def crm_get_user(telegram_id: int) -> dict | None:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT telegram_id, username, full_name, med_id, "
+            "created_at, last_bot_action_at, last_search_at "
+            "FROM public.users WHERE telegram_id = $1",
+            telegram_id,
+        )
+        if row is None:
+            return None
+        blocked = await conn.fetchval(
+            "SELECT 1 FROM crm.blocked_users WHERE telegram_id = $1", telegram_id
+        )
+    data = dict(row)
+    for key in ("created_at", "last_bot_action_at", "last_search_at"):
+        if data.get(key) is not None:
+            data[key] = data[key].isoformat()
+    data["blocked"] = blocked is not None
+    return data
+
+
+async def crm_get_user_ids(filters: dict) -> list[int]:
+    assert _pool is not None, "db.init() ещё не вызван"
+    where, params = crm_build_where(filters)
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT telegram_id FROM public.users WHERE ({where}) AND {_CRM_NOT_BLOCKED}",
+            *params,
+        )
+    return [r["telegram_id"] for r in rows]
+
+
+async def crm_create_pending_logs(broadcast_id: str, user_ids: list[int]) -> None:
+    assert _pool is not None, "db.init() ещё не вызван"
+    rows = [(broadcast_id, uid, "pending") for uid in user_ids]
+    async with _pool.acquire() as conn:
+        await conn.executemany(
+            "INSERT INTO crm.broadcast_log (broadcast_id, telegram_id, status) "
+            "VALUES ($1, $2, $3)",
+            rows,
+        )
+
+
+async def crm_update_log_status(broadcast_id: str, telegram_id: int, status: str) -> None:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE crm.broadcast_log SET status = $3 "
+            "WHERE broadcast_id = $1 AND telegram_id = $2",
+            broadcast_id, telegram_id, status,
+        )
+
+
+async def crm_mark_blocked(telegram_id: int) -> None:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO crm.blocked_users (telegram_id) VALUES ($1) "
+            "ON CONFLICT (telegram_id) DO NOTHING",
+            telegram_id,
+        )
+
+
+async def crm_broadcast_status(broadcast_id: str) -> dict:
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT status, count(*) AS n FROM crm.broadcast_log "
+            "WHERE broadcast_id = $1 GROUP BY status",
+            broadcast_id,
+        )
+    counts = {"sent": 0, "failed": 0, "blocked": 0, "pending": 0}
+    for r in rows:
+        counts[r["status"]] = r["n"]
+    counts["total"] = sum(counts.values())
+    return counts

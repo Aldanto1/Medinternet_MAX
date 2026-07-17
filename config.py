@@ -73,6 +73,22 @@ if NEURO_API_KEY:
 NEURO_CHANNEL = os.getenv("NEURO_CHANNEL", "michat")
 
 
+# ---------- CRM-панель рассылок (встроена в этот же сервис, путь /crm) ----------
+# Панель включается, только если заданы все три переменные ниже. Базу и токен
+# CRM переиспользует у бота (DATABASE_URL, BOT_TOKEN) — отдельные не нужны.
+JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_TTL_HOURS = int(os.getenv("JWT_TTL_HOURS", "12"))
+CRM_LOGIN_EMAIL = os.getenv("CRM_LOGIN_EMAIL")
+CRM_LOGIN_PASSWORD = os.getenv("CRM_LOGIN_PASSWORD")
+# Троттлинг рассылки (сообщений в секунду; лимит MAX ~30/сек)
+SEND_RATE_PER_SEC = float(os.getenv("SEND_RATE_PER_SEC", "25"))
+
+
+def crm_enabled() -> bool:
+    """CRM-панель активна, только если заданы логин/пароль и секрет JWT."""
+    return bool(JWT_SECRET and CRM_LOGIN_EMAIL and CRM_LOGIN_PASSWORD)
+
+
 def validate_config():
     """Проверяет, что все обязательные переменные заданы."""
     missing = []
