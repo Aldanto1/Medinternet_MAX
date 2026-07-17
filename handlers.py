@@ -129,7 +129,7 @@ def _keyboard(rows: list[list[dict]]) -> dict:
 def _main_keyboard() -> dict:
     rows = [
         [_btn_callback("🤝 Поделиться с другом", "nav:partners")],
-        [_btn_callback("📖 Инструкция", "nav:instruction")],
+        [_btn_callback("📖 Как пользоваться", "nav:instruction")],
     ]
     url = webapp_url()
     if url:
