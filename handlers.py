@@ -110,13 +110,15 @@ def _btn_link(text: str, url: str) -> dict:
     return {"type": "link", "text": text, "url": url}
 
 
-def _btn_open_app(text: str, url: str) -> dict:
+def _miniapp_button(text: str) -> dict:
     """Кнопка открытия mini app внутри MAX.
 
-    ⚠️ Точная схema кнопки type="open_app" требует проверки по официальной
-    документации MAX. Здесь передаём web_app.url; при необходимости поправьте.
+    Официальный способ открыть зарегистрированное в кабинете мини-приложение —
+    диплинк https://max.ru/<botName>?startapp. MAX перехватывает его и открывает
+    приложение нативно (прямая ссылка на хостинг ушла бы в браузер). Сам URL
+    приложения задаётся в кабинете бота (Чат-боты → Расширенные настройки).
     """
-    return {"type": "open_app", "text": text, "web_app": {"url": url}}
+    return {"type": "link", "text": text, "url": f"https://max.ru/{_bot_name}?startapp"}
 
 
 def _keyboard(rows: list[list[dict]]) -> dict:
@@ -137,7 +139,7 @@ def _main_keyboard() -> dict:
     ]
     url = webapp_url()
     if url:
-        rows.append([_btn_open_app("🔍 Открыть Mini App", url)])
+        rows.append([_miniapp_button("🔍 Открыть Mini App")])
     return _keyboard(rows)
 
 
@@ -145,7 +147,7 @@ def _registered_keyboard() -> dict:
     rows = []
     url = webapp_url()
     if url:
-        rows.append([_btn_open_app("🔍 Открыть Mini App", url)])
+        rows.append([_miniapp_button("🔍 Открыть Mini App")])
     rows.append([_btn_callback("🏠 Главная", "nav:home")])
     return _keyboard(rows)
 

@@ -99,7 +99,8 @@ async def handle_register(request: web.Request) -> web.Response:
 
     # Только при ПЕРВОЙ регистрации: удаляем стартовое приглашение и шлём поздравление
     if not was_registered:
-        await _notify_registered(request.app.get("client"), user_id)
+        await _notify_registered(request.app.get("client"), user_id,
+                                 request.app.get("bot_name", ""))
 
     return web.json_response({"ok": True})
 
@@ -110,18 +111,19 @@ _CONGRATS = (
 )
 
 
-def _miniapp_kb() -> list | None:
-    url = webapp_url()
-    if not url:
+def _miniapp_kb(bot_name: str) -> list | None:
+    # Кнопка = диплинк max.ru/<botName>?startapp (MAX откроет зарегистрированное
+    # в кабинете мини-приложение нативно). Показываем только если задан WEBAPP_URL.
+    if not webapp_url() or not bot_name:
         return None
     return [{
         "type": "inline_keyboard",
-        "payload": {"buttons": [[{"type": "open_app", "text": "Mini App",
-                                  "web_app": {"url": url}}]]},
+        "payload": {"buttons": [[{"type": "link", "text": "🔍 Открыть Mini App",
+                                  "url": f"https://max.ru/{bot_name}?startapp"}]]},
     }]
 
 
-async def _notify_registered(client, user_id: int) -> None:
+async def _notify_registered(client, user_id: int, bot_name: str = "") -> None:
     """Удаляет стартовое сообщение и отправляет поздравление после регистрации."""
     if client is None:
         return
@@ -134,7 +136,7 @@ async def _notify_registered(client, user_id: int) -> None:
         await db.delete_start_prompt(user_id)
     try:
         await client.send_message(user_id=user_id, text=_CONGRATS, fmt="html",
-                                  attachments=_miniapp_kb())
+                                  attachments=_miniapp_kb(bot_name))
     except Exception as e:
         logger.warning("Не удалось отправить поздравление %s: %s", user_id, e)
 
