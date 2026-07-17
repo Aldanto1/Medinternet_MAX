@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 SITE_URL = "https://medinternet.ru/"
 SUPPORT_URL = "https://max.ru/traderx_p2p"   # TODO: заменить на реальную поддержку в MAX
 AGREEMENT_URL = "https://medinternet.ru/"
-LOGO_PATH = Path(__file__).resolve().parent / "webapp" / "logo.png"
+# Квадратный баннер для сообщения бота: MAX кропает фото по центру до ~квадрата,
+# поэтому широкий logo.png обрезался. logo_banner.png — лого по центру с полями.
+LOGO_PATH = Path(__file__).resolve().parent / "webapp" / "logo_banner.png"
 
 # Контекст бота, проставляется из max_bot.py при старте.
 _client: MaxClient | None = None
