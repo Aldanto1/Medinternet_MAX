@@ -128,14 +128,8 @@ def _keyboard(rows: list[list[dict]]) -> dict:
 
 def _main_keyboard() -> dict:
     rows = [
-        [
-            _btn_callback("🤝 Партнёрам", "nav:partners"),
-            _btn_callback("💳 Мой тариф", "nav:tariff"),
-        ],
-        [
-            _btn_callback("📖 Инструкция", "nav:instruction"),
-            _btn_callback("❓ Помощь", "nav:help"),
-        ],
+        [_btn_callback("🤝 Поделиться с другом", "nav:partners")],
+        [_btn_callback("📖 Инструкция", "nav:instruction")],
     ]
     url = webapp_url()
     if url:
@@ -321,6 +315,16 @@ async def _register_via_link(chat_id: int, user_id: int, display_name: str, toke
 
 # ---------- Навигация по callback-кнопкам ----------
 
+async def _ack(callback_id: str | None, notification: str | None = None) -> None:
+    """Best-effort подтверждение нажатия кнопки. Ошибка не должна ломать навигацию."""
+    if not callback_id:
+        return
+    try:
+        await _client.answer_callback(callback_id, notification=notification)
+    except Exception as e:
+        logger.warning("answer_callback не прошёл (продолжаем навигацию): %s", e)
+
+
 async def _on_callback(update: dict) -> None:
     cb = update.get("callback") or {}
     callback_id = cb.get("callback_id")
@@ -332,14 +336,15 @@ async def _on_callback(update: dict) -> None:
     chat_id = recipient.get("chat_id") or user_id
     prev_mid = (msg.get("body") or {}).get("mid")
 
+    logger.info("callback: payload=%r user=%s chat=%s", payload, user_id, chat_id)
+
     # Заглушки, которые только показывают всплывашку и не меняют экран.
     if payload in {"tariff:week", "tariff:month", "tariff:year", "help:feedback"}:
-        if callback_id:
-            await _client.answer_callback(callback_id, notification="Скоро будет доступно 🔧")
+        await _ack(callback_id, "Скоро будет доступно 🔧")
         return
 
-    if callback_id:
-        await _client.answer_callback(callback_id)
+    # Подтверждаем нажатие «мягко»: ошибка ack не должна ломать переход по меню.
+    await _ack(callback_id)
 
     if payload == "nav:home":
         await _safe_delete(prev_mid)
