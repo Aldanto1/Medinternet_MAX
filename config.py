@@ -9,7 +9,12 @@ load_dotenv(dotenv_path=ENV_PATH)
 
 # ---------- MAX Bot ----------
 # Токен бота из кабинета MAX: Чат-боты → Перейти → Расширенные настройки → Настроить.
+# .strip() обязателен: лишние пробелы/переносы строк (частый артефакт вставки
+# токена в переменные окружения) ломают заголовок Authorization —
+# aiohttp падает с «Forbidden control character detected in headers».
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+if BOT_TOKEN:
+    BOT_TOKEN = BOT_TOKEN.strip()
 
 # Базовый адрес MAX Bot API. В документации/статьях встречаются разные хосты
 # (botapi.max.ru и platform-api2.max.ru) — вынесено в переменную, чтобы можно

@@ -40,7 +40,9 @@ class MaxClient:
     """Минимальный клиент MAX Bot API поверх aiohttp.ClientSession."""
 
     def __init__(self, token: str = BOT_TOKEN, base_url: str = MAX_API_BASE):
-        self._token = token
+        # strip на случай пробелов/переносов в токене — иначе aiohttp отвергает
+        # заголовок Authorization («Forbidden control character detected in headers»).
+        self._token = (token or "").strip()
         self._base = base_url.rstrip("/")
         self._session: aiohttp.ClientSession | None = None
 
