@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мединтернет — привязка MAX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+          media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"></noscript>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: 24px; background: #F1F3F2;
+            font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #111111; line-height: 1.2;
+        }
+        .card {
+            width: 100%; max-width: 420px; background: #fff; border-radius: 16px;
+            padding: 32px 26px; text-align: center; box-shadow: 0 12px 30px rgba(17,17,17,.06);
+            border: 1px solid #E9EBEA;
+        }
+        .badge {
+            display: inline-block; font-size: 12px; font-weight: 600; color: #009BA1; background: #E6F3F4;
+            border-radius: 50px; padding: 5px 14px; margin-bottom: 16px;
+        }
+        h1 { font-size: 22px; font-weight: 600; margin: 0 0 12px; line-height: 1.25; }
+        p { color: #676767; font-size: 15px; line-height: 1.5; margin: 0 0 24px; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; width: 100%;
+            text-decoration: none; text-align: center;
+            background: #00AAB0; color: #fff; font-size: 16px; font-weight: 500;
+            padding: 14px 24px; border-radius: 50px; transition: opacity .2s;
+        }
+        .btn:hover { opacity: .85; }
+        .btn:active { background: #009BA1; opacity: 1; }
+        .note { font-size: 12px; color: #808080; margin-top: 18px; }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <div class="badge">Личный кабинет · прототип</div>
+        <h1>Привязка MAX к Мединтернет</h1>
+        <p>Нажмите кнопку ниже, чтобы перейти в нашего бота в MAX и завершить регистрацию.
+           Ссылка одноразовая и действует только для вас.</p>
+        <a class="btn" href="{{BOT_LINK}}">Перейти в бота MAX →</a>
+        <div class="note">Ссылка обновляется при каждом заходе на страницу.</div>
+    </main>
+</body>
+</html>

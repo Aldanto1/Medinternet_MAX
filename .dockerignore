@@ -1,0 +1,20 @@
+# Локальное окружение и секреты — не попадают в образ
+venv/
+.venv/
+env/
+
+# Python-кэш
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Логи
+*.log
+.cloudflared.log
+.cloudflared.err.log
+
+# Git и IDE
+.git/
+.gitignore
+.vscode/
+.idea/
