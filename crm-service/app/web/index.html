@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мединтернет — CRM рассылки</title>
+    <link rel="stylesheet" href="/panel.css">
+</head>
+<body>
+    <!-- Экран входа -->
+    <section id="login-screen" class="center">
+        <form id="login-form" class="card">
+            <h1>CRM рассылки</h1>
+            <p class="muted">Вход для сотрудника</p>
+            <label>Email
+                <input type="email" id="login-email" autocomplete="username" required>
+            </label>
+            <label>Пароль
+                <input type="password" id="login-password" autocomplete="current-password" required>
+            </label>
+            <p id="login-error" class="error" hidden></p>
+            <button type="submit" class="btn primary">Войти</button>
+        </form>
+    </section>
+
+    <!-- Панель -->
+    <section id="panel-screen" class="wrap" hidden>
+        <header class="topbar">
+            <strong>CRM рассылки</strong>
+            <button id="logout" class="btn ghost">Выйти</button>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h2>1. Получатели</h2>
+                <div class="email-field">
+                    <span class="field-label">Поиск по MAX ID или нику (можно несколько)</span>
+                    <div id="medid-chips" class="chips"></div>
+                    <div class="medid-row">
+                        <div class="email-box" style="flex:1 1 auto;">
+                            <input type="text" id="medid-input" placeholder="введите MAX ID или ник…" autocomplete="off">
+                            <div id="medid-suggest" class="suggest" hidden></div>
+                        </div>
+                        <button type="button" id="medid-list-btn" class="btn list-btn" title="Список всех пользователей">Список</button>
+                    </div>
+                </div>
+
+                <button id="preview-btn" class="btn">Показать количество</button>
+                <p id="preview-result" class="preview" hidden></p>
+            </div>
+
+            <div class="card">
+                <h2>2. Сообщение</h2>
+
+                <div id="editor" class="editor"></div>
+                <div class="add-block">
+                    <button type="button" id="add-block-btn" class="btn small">+ Добавить блок</button>
+                    <div id="block-menu" class="block-menu" hidden>
+                        <button type="button" data-add="subtitle">Подзаголовок</button>
+                        <button type="button" data-add="text">Текст</button>
+                        <button type="button" data-add="link">Ссылка</button>
+                    </div>
+                </div>
+
+                <div class="attach-row">
+                    <label class="attach-btn">
+                        📎 Прикрепить файл
+                        <input type="file" id="attachment" hidden>
+                    </label>
+                    <span id="file-name" class="muted"></span>
+                    <button type="button" id="file-clear" class="link-btn" hidden>убрать</button>
+                </div>
+                <p class="hint">Фото или файл до 20 МБ. Текст станет подписью к файлу.</p>
+
+                <button id="send-btn" class="btn primary">Отправить рассылку</button>
+                <p id="send-error" class="error" hidden></p>
+            </div>
+
+            <div class="card" id="status-card" hidden>
+                <h2>3. Статус рассылки</h2>
+                <p class="muted">ID: <span id="bcast-id"></span></p>
+                <div class="stats">
+                    <div class="stat"><span id="s-sent">0</span><small>отправлено</small></div>
+                    <div class="stat"><span id="s-pending">0</span><small>в очереди</small></div>
+                    <div class="stat"><span id="s-blocked">0</span><small>заблокировали</small></div>
+                    <div class="stat"><span id="s-failed">0</span><small>ошибки</small></div>
+                    <div class="stat"><span id="s-total">0</span><small>всего</small></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Модальное окно со списком всех получателей -->
+    <div id="medid-modal" class="modal" hidden>
+        <div class="modal-box">
+            <div class="modal-head">
+                <strong>Зарегистрированные пользователи</strong>
+                <button type="button" id="medid-modal-close" class="link-btn">✕</button>
+            </div>
+            <div class="modal-tools">
+                <button type="button" id="medid-select-all" class="link-btn">Выбрать все</button>
+                <button type="button" id="medid-clear-all" class="link-btn">Снять все</button>
+            </div>
+            <div id="medid-list" class="modal-list"></div>
+            <button type="button" id="medid-add-selected" class="btn primary">Добавить выбранные</button>
+        </div>
+    </div>
+
+    <!-- Карточка пользователя (вся информация) -->
+    <div id="user-modal" class="modal" hidden>
+        <div class="modal-box">
+            <div class="modal-head">
+                <strong>Информация о пользователе</strong>
+                <button type="button" id="user-modal-close" class="link-btn">✕</button>
+            </div>
+            <div id="user-detail" class="modal-list detail-list"></div>
+        </div>
+    </div>
+
+    <script src="/panel.js"></script>
+</body>
+</html>

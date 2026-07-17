@@ -1,0 +1,9 @@
+# Локальный запуск CRM-сервиса (один контейнер, без Redis).
+# Заполни .env (по образцу .env.example), затем:  docker-compose up --build
+services:
+  crm-api:
+    build: .
+    env_file: .env
+    ports:
+      - "8090:8090"
+    command: python -m app.main

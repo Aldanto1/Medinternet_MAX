@@ -1,0 +1,4 @@
+aiohttp>=3.9
+asyncpg>=0.29
+python-dotenv>=1.0
+PyJWT>=2.8
