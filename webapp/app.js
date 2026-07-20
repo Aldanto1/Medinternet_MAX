@@ -393,6 +393,18 @@ document.querySelectorAll(".nav-btn").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
 });
 
+// Чипсы-подсказки: вставляют начало запроса в поле ввода (без троеточия)
+document.querySelectorAll(".prompt-chip").forEach((b) => {
+    b.addEventListener("click", () => {
+        const box = els.chatInput;
+        box.value = b.dataset.prompt;
+        box.focus();
+        const len = box.value.length;
+        box.setSelectionRange(len, len);   // курсор в конец
+        autoGrow();
+    });
+});
+
 document.getElementById("upgrade-btn").addEventListener("click", () => comingSoon("Тариф «Плюс»"));
 document.getElementById("logout-btn").addEventListener("click", logout);
 
