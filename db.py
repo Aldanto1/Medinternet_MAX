@@ -81,6 +81,17 @@ async def init() -> None:
             )
             """
         )
+        # Текущее «главное» сообщение бота у пользователя — чтобы в чате всегда было
+        # не больше одного (прежнее удаляем при показе нового).
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS main_messages (
+                telegram_id BIGINT PRIMARY KEY,
+                message_id  TEXT NOT NULL,
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
         # Служебная схема CRM-панели рассылок (создаётся автоматически, без ручной миграции).
         await conn.execute("CREATE SCHEMA IF NOT EXISTS crm")
         await conn.execute(
@@ -289,6 +300,40 @@ async def delete_start_prompt(telegram_id: int) -> None:
     async with _pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM start_prompts WHERE telegram_id = $1", telegram_id
+        )
+
+
+async def get_main_message(telegram_id: int) -> str | None:
+    """id текущего главного сообщения бота у пользователя (или None)."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT message_id FROM main_messages WHERE telegram_id = $1", telegram_id
+        )
+
+
+async def set_main_message(telegram_id: int, message_id: str) -> None:
+    """Запоминает id нового главного сообщения (перезаписывает прежнее)."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO main_messages (telegram_id, message_id, updated_at)
+            VALUES ($1, $2, now())
+            ON CONFLICT (telegram_id) DO UPDATE SET
+                message_id = EXCLUDED.message_id,
+                updated_at = now()
+            """,
+            telegram_id, message_id,
+        )
+
+
+async def clear_main_message(telegram_id: int) -> None:
+    """Забывает id главного сообщения (после его удаления)."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM main_messages WHERE telegram_id = $1", telegram_id
         )
 
 

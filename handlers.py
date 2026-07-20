@@ -211,14 +211,39 @@ async def _logo_attachment() -> list | None:
     return None
 
 
+def _extract_mid(resp) -> str | None:
+    """Достаёт id (mid) отправленного сообщения из ответа MAX (POST /messages)."""
+    if not isinstance(resp, dict):
+        return None
+    msg = resp.get("message") if isinstance(resp.get("message"), dict) else resp
+    body = msg.get("body") if isinstance(msg, dict) else None
+    if isinstance(body, dict) and body.get("mid"):
+        return body["mid"]
+    return resp.get("mid")
+
+
 async def _send_main(chat_id: int, user_id: int, display_name: str) -> None:
-    """Отправляет главное сообщение: логотип + приветствие + навигация."""
+    """Отправляет главное сообщение: логотип + приветствие + навигация.
+
+    В чате держим не больше одного главного сообщения: перед отправкой нового
+    удаляем прежнее (его id хранится в БД) и запоминаем id только что отправленного.
+    """
     caption = await _main_caption(display_name, user_id)
     kb = _main_keyboard()
     logo = await _logo_attachment()
     attachments = [kb] + (logo or [])
-    await _client.send_message(chat_id=chat_id, text=caption, fmt="html",
-                               attachments=attachments)
+
+    prev_mid = await db.get_main_message(user_id)
+    if prev_mid:
+        await _safe_delete(prev_mid)
+
+    resp = await _client.send_message(chat_id=chat_id, text=caption, fmt="html",
+                                      attachments=attachments)
+    mid = _extract_mid(resp)
+    if mid:
+        await db.set_main_message(user_id, mid)
+    else:
+        await db.clear_main_message(user_id)
 
 
 async def _safe_delete(message_id: str | None) -> None:
