@@ -177,8 +177,11 @@ async def handle_me(request: web.Request) -> web.Response:
 
     await db.touch_bot_action(max_user["id"])  # открытие Mini App — тоже действие в боте
     row = await db.get_user(max_user["id"])
+    # «Вышедший из аккаунта» (active=false) для mini app = не зарегистрирован:
+    # показываем экран регистрации, хотя данные в БД сохранены.
+    active = bool(row is not None and row["active"])
     profile = None
-    if row is not None:
+    if active:
         created = row["created_at"]
         profile = {
             "full_name": row["full_name"],
@@ -190,10 +193,30 @@ async def handle_me(request: web.Request) -> web.Response:
 
     return web.json_response({
         "ok": True,
-        "registered": row is not None,
+        "registered": active,
         "ai_enabled": ai_client.is_configured(),
         "user": profile,
     })
+
+
+async def handle_logout(request: web.Request) -> web.Response:
+    """«Выйти из аккаунта»: деактивирует запись (данные сохраняются) и возвращает
+    в чат исходное (до-регистрационное) главное сообщение с предложением
+    зарегистрироваться заново."""
+    max_user, _body, err = await _authenticated_user(request)
+    if err is not None:
+        return err
+    uid = max_user["id"]
+    await db.logout_user(uid)
+    import handlers  # ленивый импорт: избегаем цикла на уровне модуля
+    name = " ".join(
+        filter(None, [max_user.get("first_name"), max_user.get("last_name")])
+    ) or "коллега"
+    try:
+        await handlers.send_main(uid, name)   # без chat_id -> адресуем по user_id
+    except Exception as e:
+        logger.warning("Не удалось обновить сообщение после выхода %s: %s", uid, e)
+    return web.json_response({"ok": True})
 
 
 async def handle_ai_message(request: web.Request) -> web.Response:
@@ -378,6 +401,7 @@ def build_app(client=None, bot_name: str = "") -> web.Application:
     app.router.add_get("/logo.png", _file("logo.png"))
     app.router.add_post("/api/register", handle_register)
     app.router.add_post("/api/me", handle_me)
+    app.router.add_post("/api/logout", handle_logout)
     app.router.add_post("/api/ai/message", handle_ai_message)
     app.router.add_post("/api/ai/message/stream", handle_ai_stream)
     app.router.add_post("/api/ai/reset", handle_ai_reset)

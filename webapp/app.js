@@ -368,7 +368,13 @@ function comingSoon(what) {
 }
 
 function logout() {
-    waConfirm("Выйти из аккаунта?", (ok) => { if (ok) waClose(); });
+    waConfirm("Выйти из аккаунта?", async (ok) => {
+        if (!ok) return;
+        // Деактивируем аккаунт на сервере (данные сохраняются) — бот вернёт
+        // исходное сообщение с предложением зарегистрироваться заново.
+        try { await api("/api/logout"); } catch (e) { /* всё равно закрываем */ }
+        waClose();
+    });
 }
 
 // ---------- События ----------
@@ -387,7 +393,6 @@ document.querySelectorAll(".nav-btn").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
 });
 
-document.getElementById("subscription-btn").addEventListener("click", () => comingSoon("Подписка и оплата"));
 document.getElementById("upgrade-btn").addEventListener("click", () => comingSoon("Тариф «Плюс»"));
 document.getElementById("logout-btn").addEventListener("click", logout);
 

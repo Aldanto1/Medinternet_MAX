@@ -48,6 +48,9 @@ async def init() -> None:
         # Активность: последнее действие в боте и последний запрос в поисковике
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_bot_action_at TIMESTAMPTZ")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_search_at TIMESTAMPTZ")
+        # Активен ли аккаунт. «Выйти из аккаунта» ставит FALSE (данные сохраняются),
+        # повторная регистрация возвращает TRUE.
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE")
         # Одноразовые токены deep-link регистрации
         await conn.execute(
             """
@@ -134,11 +137,12 @@ async def upsert_user(telegram_id: int, med_id: int, username: str | None = None
     async with _pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO users (telegram_id, med_id, username)
-            VALUES ($1, $2, $3)
+            INSERT INTO users (telegram_id, med_id, username, active)
+            VALUES ($1, $2, $3, TRUE)
             ON CONFLICT (telegram_id) DO UPDATE SET
                 med_id     = EXCLUDED.med_id,
                 username   = EXCLUDED.username,
+                active     = TRUE,
                 updated_at = now()
             """,
             telegram_id,
@@ -160,11 +164,12 @@ async def register_user(
     async with _pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO users (telegram_id, username, full_name, last_bot_action_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO users (telegram_id, username, full_name, last_bot_action_at, active)
+            VALUES ($1, $2, $3, now(), TRUE)
             ON CONFLICT (telegram_id) DO UPDATE SET
                 username           = EXCLUDED.username,
                 full_name          = EXCLUDED.full_name,
+                active             = TRUE,
                 last_bot_action_at = now(),
                 updated_at         = now()
             """,
@@ -221,13 +226,23 @@ async def get_user(telegram_id: int):
 
 
 async def user_exists(telegram_id: int) -> bool:
-    """True, если пользователь уже прошёл регистрацию."""
+    """True, если пользователь зарегистрирован И активен (не вышел из аккаунта)."""
     assert _pool is not None, "db.init() ещё не вызван"
     async with _pool.acquire() as conn:
         row = await conn.fetchval(
-            "SELECT 1 FROM users WHERE telegram_id = $1", telegram_id
+            "SELECT 1 FROM users WHERE telegram_id = $1 AND active", telegram_id
         )
         return row is not None
+
+
+async def logout_user(telegram_id: int) -> None:
+    """«Выйти из аккаунта»: деактивирует запись, НЕ удаляя данные."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET active = FALSE, updated_at = now() WHERE telegram_id = $1",
+            telegram_id,
+        )
 
 
 async def get_ai_chat_id(telegram_id: int) -> str | None:

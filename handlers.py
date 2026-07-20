@@ -224,11 +224,12 @@ def _extract_mid(resp) -> str | None:
     return resp.get("mid")
 
 
-async def _send_main(chat_id: int, user_id: int, display_name: str) -> None:
+async def send_main(user_id: int, display_name: str, chat_id: int | None = None) -> None:
     """Отправляет главное сообщение: логотип + приветствие + навигация.
 
     В чате держим не больше одного главного сообщения: перед отправкой нового
     удаляем прежнее (его id хранится в БД) и запоминаем id только что отправленного.
+    Адресуем по chat_id (из апдейта), а при вызове из веб-сервера — по user_id.
     """
     caption = await _main_caption(display_name, user_id)
     kb = _main_keyboard()
@@ -239,7 +240,8 @@ async def _send_main(chat_id: int, user_id: int, display_name: str) -> None:
     if prev_mid:
         await _safe_delete(prev_mid)
 
-    resp = await _client.send_message(chat_id=chat_id, text=caption, fmt="html",
+    target = {"chat_id": chat_id} if chat_id is not None else {"user_id": user_id}
+    resp = await _client.send_message(**target, text=caption, fmt="html",
                                       attachments=attachments)
     mid = _extract_mid(resp)
     if mid:
@@ -291,7 +293,7 @@ async def _on_bot_started(update: dict) -> None:
     if payload:
         await _register_via_link(chat_id, user_id, _display_name(user), payload)
         return
-    await _send_main(chat_id, user_id, _display_name(user))
+    await send_main(user_id, _display_name(user), chat_id)
 
 
 async def _on_message(update: dict) -> None:
@@ -311,7 +313,7 @@ async def _on_message(update: dict) -> None:
         if token:
             await _register_via_link(chat_id, user_id, _display_name(sender), token)
         else:
-            await _send_main(chat_id, user_id, _display_name(sender))
+            await send_main(user_id, _display_name(sender), chat_id)
     elif text.startswith("/help"):
         await _client.send_message(
             chat_id=chat_id, fmt="html",
@@ -380,7 +382,7 @@ async def _on_callback(update: dict) -> None:
 
     if payload == "nav:home":
         await _safe_delete(prev_mid)
-        await _send_main(chat_id, user_id, _display_name(user))
+        await send_main(user_id, _display_name(user), chat_id)
     elif payload == "nav:partners":
         await _safe_delete(prev_mid)
         await _client.send_message(chat_id=chat_id, text=_partners_text(), fmt="html",
