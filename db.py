@@ -95,6 +95,18 @@ async def init() -> None:
             )
             """
         )
+        # Оценки ответов поисковика (лайк/дизлайк из mini app).
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_feedback (
+                id          BIGSERIAL PRIMARY KEY,
+                telegram_id BIGINT NOT NULL,
+                question    TEXT,
+                rating      TEXT NOT NULL,   -- like / dislike
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
         # Служебная схема CRM-панели рассылок (создаётся автоматически, без ручной миграции).
         await conn.execute("CREATE SCHEMA IF NOT EXISTS crm")
         await conn.execute(
@@ -277,6 +289,16 @@ async def clear_ai_session(telegram_id: int) -> None:
     async with _pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM ai_sessions WHERE telegram_id = $1", telegram_id
+        )
+
+
+async def add_ai_feedback(telegram_id: int, question: str, rating: str) -> None:
+    """Сохраняет оценку ответа поисковика (like/dislike)."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO ai_feedback (telegram_id, question, rating) VALUES ($1, $2, $3)",
+            telegram_id, question, rating,
         )
 
 

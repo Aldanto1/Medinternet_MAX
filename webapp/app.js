@@ -26,6 +26,10 @@ const els = {
     chatInput: document.getElementById("chat-input"),
     chatSend: document.getElementById("chat-send"),
     chatReset: document.getElementById("chat-reset"),
+    historyBtn: document.getElementById("history-btn"),
+    historyPanel: document.getElementById("history-panel"),
+    historyList: document.getElementById("history-list"),
+    historyClear: document.getElementById("history-clear"),
 };
 
 let state = { registered: false, aiEnabled: false, user: null, screen: "loading", tab: "search" };
@@ -239,6 +243,7 @@ let sending = false;
 async function sendChat() {
     const text = els.chatInput.value.trim();
     if (!text || sending) return;
+    addHistory(text);
     sending = true;
     els.chatSend.disabled = true;
     els.chatInput.value = "";
@@ -261,9 +266,13 @@ async function sendChat() {
         }
     }
 
+    let finished = false;
     function finish() {
+        if (finished) return;
+        finished = true;
         sending = false;
         els.chatSend.disabled = false;
+        if (bubble && gotText) addAnswerActions(bubble, text);   // копировать / оценка
     }
 
     function enqueue(chunk) {
@@ -361,6 +370,128 @@ function autoGrow() {
     box.style.height = Math.min(box.scrollHeight, 120) + "px";
 }
 
+// ---------- Действия под ответом ИИ: копировать / лайк / дизлайк ----------
+
+const ICONS = {
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    like: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>',
+    dislike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V3"/><path d="M9 5.88 10 10H4.17a2 2 0 0 0-1.92 2.56l2.33 8A2 2 0 0 0 6.5 22H20a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2.76a2 2 0 0 1-1.79-1.11L12 2"/></svg>',
+};
+
+function actBtn(kind, svg, title) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "answer-act " + kind;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.innerHTML = svg;
+    return b;
+}
+
+function answerText(bubble) {
+    return Array.from(bubble.querySelectorAll(".ai-line"))
+        .map((el) => el.innerText).join("\n").trim();
+}
+
+async function copyAnswer(bubble, btn) {
+    const txt = answerText(bubble);
+    try {
+        await navigator.clipboard.writeText(txt);
+    } catch (e) {
+        const ta = document.createElement("textarea");
+        ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        try { document.execCommand("copy"); } catch (e2) { /* игнор */ }
+        ta.remove();
+    }
+    btn.classList.add("copied");
+    waHaptic("light");
+    setTimeout(() => btn.classList.remove("copied"), 1200);
+}
+
+function rate(question, value, btn, otherBtn) {
+    const wasActive = btn.classList.contains("active");
+    otherBtn.classList.remove("active");
+    if (wasActive) { btn.classList.remove("active"); return; }  // повторный клик — снять
+    btn.classList.add("active");
+    waHaptic("light");
+    api("/api/ai/feedback", { message: question, rating: value }).catch(() => { /* не критично */ });
+}
+
+function addAnswerActions(bubble, question) {
+    if (bubble.querySelector(".answer-actions")) return;
+    const bar = document.createElement("div");
+    bar.className = "answer-actions";
+    const copyBtn = actBtn("copy", ICONS.copy, "Скопировать ответ");
+    copyBtn.addEventListener("click", () => copyAnswer(bubble, copyBtn));
+    const likeBtn = actBtn("like", ICONS.like, "Полезный ответ");
+    const dislikeBtn = actBtn("dislike", ICONS.dislike, "Ответ не помог");
+    likeBtn.addEventListener("click", () => rate(question, "like", likeBtn, dislikeBtn));
+    dislikeBtn.addEventListener("click", () => rate(question, "dislike", dislikeBtn, likeBtn));
+    bar.append(copyBtn, likeBtn, dislikeBtn);
+    bubble.appendChild(bar);
+    scrollToBottom();
+}
+
+// ---------- История запросов (в localStorage) ----------
+
+const HISTORY_KEY = "mi_history";
+const HISTORY_MAX = 30;
+
+function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch (e) { return []; }
+}
+function saveHistory(arr) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); } catch (e) { /* игнор */ }
+}
+function addHistory(q) {
+    q = (q || "").trim();
+    if (!q) return;
+    let arr = loadHistory().filter((x) => x !== q);
+    arr.unshift(q);
+    if (arr.length > HISTORY_MAX) arr = arr.slice(0, HISTORY_MAX);
+    saveHistory(arr);
+}
+function renderHistory() {
+    const list = els.historyList;
+    const arr = loadHistory();
+    list.innerHTML = "";
+    if (!arr.length) {
+        const empty = document.createElement("div");
+        empty.className = "history-empty";
+        empty.textContent = "Пока нет запросов";
+        list.appendChild(empty);
+        return;
+    }
+    arr.forEach((q) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "history-item";
+        item.textContent = q;
+        item.title = q;
+        item.addEventListener("click", () => {
+            els.chatInput.value = q;
+            els.chatInput.focus();
+            const len = els.chatInput.value.length;
+            els.chatInput.setSelectionRange(len, len);
+            autoGrow();
+            hideHistory();
+        });
+        list.appendChild(item);
+    });
+}
+function toggleHistory() {
+    if (els.historyPanel.hidden) { renderHistory(); els.historyPanel.hidden = false; }
+    else els.historyPanel.hidden = true;
+}
+function hideHistory() { els.historyPanel.hidden = true; }
+function clearHistory() {
+    saveHistory([]);
+    renderHistory();
+    waHaptic("light");
+}
+
 // ---------- Информация ----------
 
 function comingSoon(what) {
@@ -403,6 +534,15 @@ document.querySelectorAll(".prompt-chip").forEach((b) => {
         box.setSelectionRange(len, len);   // курсор в конец
         autoGrow();
     });
+});
+
+// История запросов
+els.historyBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleHistory(); });
+els.historyClear.addEventListener("click", clearHistory);
+document.addEventListener("click", (e) => {
+    if (els.historyPanel.hidden) return;
+    if (els.historyPanel.contains(e.target) || els.historyBtn.contains(e.target)) return;
+    hideHistory();   // клик вне панели — закрыть
 });
 
 document.getElementById("upgrade-btn").addEventListener("click", () => comingSoon("Тариф «Плюс»"));

@@ -41,9 +41,17 @@
                     </div>
                     <div class="topbar-actions">
                         <button id="chat-reset" class="btn-newchat" type="button">Новый чат</button>
+                        <button id="history-btn" class="icon-round" type="button" title="История запросов" aria-label="История запросов">🕘</button>
                         <button class="icon-round theme-toggle" type="button" title="Сменить тему" aria-label="Сменить тему">🌙</button>
                     </div>
                 </header>
+                <div id="history-panel" class="history-panel" hidden>
+                    <div class="history-head">
+                        <strong>История запросов</strong>
+                        <button id="history-clear" type="button" class="history-clear">Очистить</button>
+                    </div>
+                    <div id="history-list" class="history-list"></div>
+                </div>
                 <div id="messages" class="messages"></div>
                 <form id="chat-form" class="chat-form">
                     <textarea id="chat-input" rows="1" autocomplete="off" placeholder="Задайте вопрос…"></textarea>

@@ -346,6 +346,22 @@ async def handle_ai_reset(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def handle_ai_feedback(request: web.Request) -> web.Response:
+    """Сохраняет оценку ответа поисковика (лайк/дизлайк) из mini app."""
+    max_user, body, err = await _authenticated_user(request)
+    if err is not None:
+        return err
+    rating = (body.get("rating") or "").strip()
+    if rating not in ("like", "dislike"):
+        return web.json_response({"ok": False, "error": "Неверная оценка"}, status=400)
+    question = (body.get("message") or "")[:2000]
+    try:
+        await db.add_ai_feedback(max_user["id"], question, rating)
+    except Exception as e:
+        logger.warning("Не удалось сохранить оценку %s: %s", max_user["id"], e)
+    return web.json_response({"ok": True})
+
+
 def _file(name: str):
     async def handler(_request: web.Request) -> web.Response:
         resp = web.FileResponse(WEBAPP_DIR / name)
@@ -405,6 +421,7 @@ def build_app(client=None, bot_name: str = "") -> web.Application:
     app.router.add_post("/api/ai/message", handle_ai_message)
     app.router.add_post("/api/ai/message/stream", handle_ai_stream)
     app.router.add_post("/api/ai/reset", handle_ai_reset)
+    app.router.add_post("/api/ai/feedback", handle_ai_feedback)
 
     # CRM-панель рассылок под /crm (если заданы логин/пароль/JWT). Тот же сервис.
     if config.crm_enabled():
