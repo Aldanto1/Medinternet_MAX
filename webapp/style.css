@@ -187,7 +187,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
     padding: 0; background: transparent;   /* последний элемент внутри области сообщений (в скролле) */
 }
 .prompt-chip {
-    flex: 0 1 auto; white-space: nowrap; cursor: pointer;
+    flex: 0 1 auto; max-width: 100%; white-space: nowrap; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis;
     font-family: inherit; font-size: 12px; font-weight: 500;
     color: var(--brand); background: var(--brand-soft);
     border: 1px solid transparent; border-radius: var(--radius-pill);

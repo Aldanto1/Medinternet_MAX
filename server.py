@@ -290,9 +290,12 @@ async def handle_ai_stream(request: web.Request) -> web.Response:
         await resp.write(("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode("utf-8"))
 
     queue: asyncio.Queue = asyncio.Queue()
+    answer_parts: list = []   # копим текст ответа для генерации подсказок-продолжений
 
     async def feed(cid):
         async for kind, value in ai_client.stream_message(cid, message):
+            if kind == "text":
+                answer_parts.append(value)
             await queue.put(("event", (kind, value)))
 
     async def producer():
@@ -328,6 +331,18 @@ async def handle_ai_stream(request: web.Request) -> web.Response:
                 break
             kind, value = payload
             await emit({"kind": kind, "value": value})
+        # После ответа: подсказки-продолжения на основе Q&A (генерирует нейросеть
+        # в отдельной сессии). Не критично — при ошибке/таймауте просто не шлём.
+        answer_text = "".join(answer_parts).strip()
+        if answer_text:
+            try:
+                sugg = await asyncio.wait_for(
+                    ai_client.generate_followups(message, answer_text), timeout=25.0
+                )
+            except Exception:
+                sugg = []
+            if sugg:
+                await emit({"kind": "suggestions", "value": sugg})
         await emit({"kind": "done"})
     except Exception as e:
         logger.warning("Ошибка отдачи стрима %s: %s", uid, e)

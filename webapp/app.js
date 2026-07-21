@@ -348,6 +348,10 @@ async function sendChat() {
                 } else if (obj.kind === "error") {
                     if (!bubble) typing.remove();
                     addBubble("error", obj.value);
+                } else if (obj.kind === "suggestions") {
+                    if (Array.isArray(obj.value) && obj.value.length) {
+                        renderChips(obj.value.map((q) => ({ label: q, insert: q })));
+                    }
                 }
             }
         }
@@ -373,6 +377,7 @@ async function resetChat() {
     // Удаляем сообщения, но оставляем чипсы (они часть области сообщений)
     els.messages.querySelectorAll(".bubble").forEach((b) => b.remove());
     greetChat();
+    renderStaticChips();   // новый чат — снова статичные подсказки
     waHaptic("light");
 }
 
@@ -535,17 +540,42 @@ document.querySelectorAll(".nav-btn").forEach((b) => {
     b.addEventListener("click", () => switchTab(b.dataset.tab));
 });
 
-// Чипсы-подсказки: вставляют начало запроса в поле ввода (без троеточия)
-document.querySelectorAll(".prompt-chip").forEach((b) => {
-    b.addEventListener("click", () => {
-        const box = els.chatInput;
-        box.value = b.dataset.prompt;
-        box.focus();
-        const len = box.value.length;
-        box.setSelectionRange(len, len);   // курсор в конец
-        autoGrow();
+// Чипсы-подсказки: до первого вопроса — статичные (вставляют начало запроса),
+// после ответа — динамические уточняющие вопросы от нейросети (вставляют вопрос целиком).
+const STATIC_CHIPS = [
+    { label: "Клинические рекомендации по…", insert: "Клинические рекомендации по " },
+    { label: "Инструкция по применению…", insert: "Инструкция по применению " },
+    { label: "Схема применения…", insert: "Схема применения " },
+];
+
+function chipInsert(text) {
+    const box = els.chatInput;
+    box.value = text;
+    box.focus();
+    const len = box.value.length;
+    box.setSelectionRange(len, len);   // курсор в конец
+    autoGrow();
+}
+
+function renderChips(items) {
+    const box = els.promptChips;
+    if (!box) return;
+    box.innerHTML = "";
+    items.forEach((it) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "prompt-chip";
+        b.textContent = it.label;
+        b.title = it.label;
+        b.addEventListener("click", () => chipInsert(it.insert));
+        box.appendChild(b);
     });
-});
+    scrollToBottom();
+}
+
+function renderStaticChips() { renderChips(STATIC_CHIPS); }
+
+renderStaticChips();   // стартовое состояние — статичные подсказки
 
 // История запросов
 els.historyBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleHistory(); });

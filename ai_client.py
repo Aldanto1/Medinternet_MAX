@@ -7,6 +7,7 @@
 """
 import json
 import logging
+import re
 
 import aiohttp
 
@@ -112,3 +113,39 @@ async def stream_message(chat_id: str, message: str):
                     yield ("text", obj["Text"])
                 elif obj.get("Action"):
                     yield ("action", obj["Action"])
+
+
+def _parse_followups(text: str) -> list[str]:
+    """Разбирает ответ ИИ в список из ≤3 коротких вопросов (по строкам)."""
+    out: list[str] = []
+    for line in (text or "").splitlines():
+        s = re.sub(r"^[\s\-•*\d.)]+", "", line).replace("**", "").strip()
+        if not s or len(s) > 120:
+            continue
+        out.append(s)
+        if len(out) >= 3:
+            break
+    return out
+
+
+async def generate_followups(question: str, answer: str) -> list[str]:
+    """Генерирует до 3 уточняющих вопросов на основе Q&A.
+
+    Использует ОТДЕЛЬНУЮ эфемерную сессию, чтобы не засорять контекст диалога
+    пользователя. При любой ошибке возвращает [] (подсказки просто не появятся).
+    """
+    if not is_configured():
+        return []
+    prompt = (
+        "На основе вопроса врача и ответа ниже предложи 3 коротких уточняющих "
+        "вопроса, которые врач мог бы задать следующими. Каждый вопрос — с новой "
+        "строки, без нумерации и пояснений, не длиннее 8 слов.\n\n"
+        f"Вопрос: {question}\n\nОтвет: {(answer or '')[:2000]}"
+    )
+    try:
+        chat_id = await create_session("suggest")
+        result = await send_message(chat_id, prompt)
+        return _parse_followups(result.get("markdown") or "")
+    except Exception as e:
+        logger.info("Не удалось сгенерировать подсказки: %s", e)
+        return []
