@@ -375,7 +375,6 @@ function autoGrow() {
 const ICONS = {
     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     like: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>',
-    dislike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V3"/><path d="M9 5.88 10 10H4.17a2 2 0 0 0-1.92 2.56l2.33 8A2 2 0 0 0 6.5 22H20a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2.76a2 2 0 0 1-1.79-1.11L12 2"/></svg>',
 };
 
 function actBtn(kind, svg, title) {
@@ -425,7 +424,7 @@ function addAnswerActions(bubble, question) {
     const copyBtn = actBtn("copy", ICONS.copy, "Скопировать ответ");
     copyBtn.addEventListener("click", () => copyAnswer(bubble, copyBtn));
     const likeBtn = actBtn("like", ICONS.like, "Полезный ответ");
-    const dislikeBtn = actBtn("dislike", ICONS.dislike, "Ответ не помог");
+    const dislikeBtn = actBtn("dislike", ICONS.like, "Ответ не помог");  // перевёрнутый лайк (CSS)
     likeBtn.addEventListener("click", () => rate(question, "like", likeBtn, dislikeBtn));
     dislikeBtn.addEventListener("click", () => rate(question, "dislike", dislikeBtn, likeBtn));
     bar.append(copyBtn, likeBtn, dislikeBtn);

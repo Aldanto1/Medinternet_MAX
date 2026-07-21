@@ -203,6 +203,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
     transition: background .15s, color .15s, border-color .15s;
 }
 .answer-act svg { width: 16px; height: 16px; }
+.answer-act.dislike svg { transform: rotate(180deg); }   /* дизлайк = перевёрнутый лайк */
 .answer-act:hover { background: var(--surface); }
 .answer-act.like.active { background: var(--success); border-color: var(--success); color: #fff; }
 .answer-act.dislike.active { background: var(--danger); border-color: var(--danger); color: #fff; }
