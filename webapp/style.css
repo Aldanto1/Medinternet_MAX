@@ -99,6 +99,8 @@ input:focus, textarea:focus { border-color: var(--brand); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
 .error { margin: 0; color: var(--danger); font-size: 14px; }
 #reg-submit { margin-top: 4px; }
+/* Крупная кнопка регистрации на первой странице */
+.register-cta { margin-top: 22px; padding: 16px 24px; font-size: 17px; font-weight: 600; }
 
 /* ---------- Приложение и вкладки ---------- */
 #app { display: flex; flex-direction: column; height: 100%; }
@@ -182,7 +184,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
    три были видны и в узком (не развёрнутом) окне мини-аппа. */
 .prompt-chips {
     flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px;
-    padding: 0 12px 10px; background: var(--card);
+    padding: 6px 12px; background: transparent;   /* в нижней части диалога, не в панели ввода */
 }
 .prompt-chip {
     flex: 0 1 auto; white-space: nowrap; cursor: pointer;

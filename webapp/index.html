@@ -22,9 +22,11 @@
             <div class="card">
                 <img class="logo-img" src="/logo.png" alt="Мединтернет">
                 <p class="subtitle">
-                    Зайдите на сайт <a id="site-link" href="#">medinternet.ru</a> и в своём
-                    личном кабинете перейдите по ссылке для регистрации в Telegram.
+                    Чтобы пользоваться медицинским поисковиком, зарегистрируйтесь.
+                    На сайте <b>medinternet.ru</b> в личном кабинете есть ссылка для
+                    регистрации в <b>MAX</b>. Нажмите кнопку ниже, чтобы перейти к регистрации.
                 </p>
+                <button id="register-btn" class="btn btn-primary register-cta" type="button">Зарегистрироваться</button>
             </div>
         </div>
     </section>
@@ -53,15 +55,15 @@
                     <div id="history-list" class="history-list"></div>
                 </div>
                 <div id="messages" class="messages"></div>
-                <form id="chat-form" class="chat-form">
-                    <textarea id="chat-input" rows="1" autocomplete="off" placeholder="Задайте вопрос…"></textarea>
-                    <button type="submit" id="chat-send" class="send-btn" aria-label="Отправить">➤</button>
-                </form>
                 <div class="prompt-chips">
                     <button type="button" class="prompt-chip" data-prompt="Клинические рекомендации по ">Клинические рекомендации по…</button>
                     <button type="button" class="prompt-chip" data-prompt="Инструкция по применению ">Инструкция по применению…</button>
                     <button type="button" class="prompt-chip" data-prompt="Схема применения ">Схема применения…</button>
                 </div>
+                <form id="chat-form" class="chat-form">
+                    <textarea id="chat-input" rows="1" autocomplete="off" placeholder="Задайте вопрос…"></textarea>
+                    <button type="submit" id="chat-send" class="send-btn" aria-label="Отправить">➤</button>
+                </form>
             </section>
 
             <!-- Личный кабинет -->
