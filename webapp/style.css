@@ -183,8 +183,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
 /* Подсказки-«чипсы» под строкой ввода: переносятся на новую строку, чтобы все
    три были видны и в узком (не развёрнутом) окне мини-аппа. */
 .prompt-chips {
-    flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px;
-    padding: 6px 12px; background: transparent;   /* в нижней части диалога, не в панели ввода */
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 0; background: transparent;   /* последний элемент внутри области сообщений (в скролле) */
 }
 .prompt-chip {
     flex: 0 1 auto; white-space: nowrap; cursor: pointer;

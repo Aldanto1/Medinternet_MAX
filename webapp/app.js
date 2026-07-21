@@ -30,6 +30,7 @@ const els = {
     historyPanel: document.getElementById("history-panel"),
     historyList: document.getElementById("history-list"),
     historyClear: document.getElementById("history-clear"),
+    promptChips: document.querySelector(".prompt-chips"),
 };
 
 let state = { registered: false, aiEnabled: false, user: null, screen: "loading", tab: "search" };
@@ -113,7 +114,7 @@ function switchTab(name) {
     document.querySelectorAll(".nav-btn").forEach((b) => {
         b.classList.toggle("active", b.dataset.tab === name);
     });
-    if (name === "search" && els.messages.childElementCount === 0) greetChat();
+    if (name === "search" && !els.messages.querySelector(".bubble")) greetChat();
     if (name === "profile") renderProfile();
 }
 
@@ -183,15 +184,25 @@ function renderProfile() {
 // ---------- Чат ----------
 
 function greetChat() {
-    if (els.messages.childElementCount > 0) return;
+    if (els.messages.querySelector(".bubble")) return;   // уже есть сообщения
     addBubble("ai", state.aiEnabled === false ? T.aiUnavailable : T.greet);
+}
+
+// Сообщения вставляем ПЕРЕД чипсами — так чипсы остаются последним элементом
+// внутри области сообщений (в скролле, «одним целым» с текстом ответа).
+function addToMessages(el) {
+    if (els.promptChips && els.promptChips.parentNode === els.messages) {
+        els.messages.insertBefore(el, els.promptChips);
+    } else {
+        els.messages.appendChild(el);
+    }
 }
 
 function addBubble(kind, text) {
     const el = document.createElement("div");
     el.className = "bubble " + kind;
     el.textContent = text;
-    els.messages.appendChild(el);
+    addToMessages(el);
     scrollToBottom();
     return el;
 }
@@ -200,7 +211,7 @@ function addTyping() {
     const el = document.createElement("div");
     el.className = "bubble ai";
     el.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
-    els.messages.appendChild(el);
+    addToMessages(el);
     scrollToBottom();
     return el;
 }
@@ -359,7 +370,8 @@ async function sendChat() {
 async function resetChat() {
     if (sending) return;
     try { await api("/api/ai/reset"); } catch (e) { /* не критично */ }
-    els.messages.innerHTML = "";
+    // Удаляем сообщения, но оставляем чипсы (они часть области сообщений)
+    els.messages.querySelectorAll(".bubble").forEach((b) => b.remove());
     greetChat();
     waHaptic("light");
 }
