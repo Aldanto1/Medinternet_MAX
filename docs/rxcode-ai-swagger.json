@@ -1,0 +1,908 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "RXCode AI API",
+    "contact": {
+      "name": "Vitaly Zhukov",
+      "email": "v.zhukov@rxcode.ru"
+    },
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/chats": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Создание новой сессии чата",
+        "consumes": [
+          "application/json-patch+json",
+          "application/json",
+          "text/json",
+          "application/*+json"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Параметры сессии",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/CreateChatRequest"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/CreateSessionResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Получение списка сессий пользователя",
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "userId",
+            "description": "Идентификатор пользователя",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SessionItem"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/{id}": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "consumes": [
+          "application/json-patch+json",
+          "application/json",
+          "text/json",
+          "application/*+json"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/UpdateChatRequest"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/completion": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "consumes": [
+          "application/json-patch+json",
+          "application/json",
+          "text/json",
+          "application/*+json"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/CompletionRequest"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PostMessageResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/completion/stream": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "consumes": [
+          "application/json-patch+json",
+          "application/json",
+          "text/json",
+          "application/*+json"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/CompletionRequest"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/{chatId}/messages/stream": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Отправка сообщения в чат с потоковой передачей ответа",
+        "consumes": [
+          "application/json-patch+json",
+          "application/json",
+          "text/json",
+          "application/*+json"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chatId",
+            "description": "Идентификатор чата",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Параметры",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/PostMessageRequest"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/{chatId}/messages": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Отправка сообщения в чат",
+        "consumes": [
+          "application/json-patch+json",
+          "application/json",
+          "text/json",
+          "application/*+json"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chatId",
+            "description": "Идентификатор чата",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Параметры",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/PostMessageRequest"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PostMessageResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Получение списка сообщений чата",
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chatId",
+            "description": "Идентификатор чата",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ChatMessageItem"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/{chatId}/messages/count": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chatId",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/{chatId}/messages/{messageId}/like": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chatId",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "path",
+            "name": "messageId",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PostMessageResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/chats/{chatId}/messages/{messageId}/dislike": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chatId",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "in": "path",
+            "name": "messageId",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PostMessageResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorDetails"
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Проверка состояния сервиса",
+        "produces": [
+          "text/plain",
+          "application/json",
+          "text/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/HealthStatus"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "schema": {
+              "$ref": "#/definitions/HealthStatus"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ChatMessageItem": {
+      "type": "object",
+      "description": "Сообщение чата",
+      "properties": {
+        "Id": {
+          "type": "string",
+          "description": "Идентификатор сообщения",
+          "format": "uuid"
+        },
+        "Direction": {
+          "type": "integer",
+          "description": "Направление: 0 - пользователь, 1 - ИИ",
+          "format": "int32"
+        },
+        "Text": {
+          "type": "string",
+          "description": "Текст сообщения",
+          "x-nullable": true
+        },
+        "Question": {
+          "type": "string",
+          "description": "Вопрос пользователя (для сообщений от ИИ)",
+          "x-nullable": true
+        },
+        "Notes": {
+          "type": "string",
+          "description": "Примечание",
+          "x-nullable": true
+        },
+        "Sources": {
+          "type": "array",
+          "description": "Источники",
+          "items": {
+            "type": "string"
+          },
+          "x-nullable": true
+        },
+        "Created": {
+          "type": "string",
+          "description": "Дата создания",
+          "format": "date-time"
+        },
+        "Rate": {
+          "type": "integer",
+          "description": "Оценка сообщения",
+          "format": "int32",
+          "x-nullable": true
+        },
+        "RagBased": {
+          "type": "boolean",
+          "description": "Признак использования RAG",
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "CompletionRequest": {
+      "type": "object",
+      "properties": {
+        "Message": {
+          "type": "string",
+          "x-nullable": true
+        },
+        "Context": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Message"
+          },
+          "x-nullable": true
+        },
+        "ChannelId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CreateChatRequest": {
+      "type": "object",
+      "required": [
+        "Channel",
+        "UserId"
+      ],
+      "properties": {
+        "UserId": {
+          "type": "string",
+          "description": "Идентификатор пользователя в системе",
+          "minLength": 1
+        },
+        "Channel": {
+          "type": "string",
+          "description": "Название канала",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "CreateSessionResponse": {
+      "type": "object",
+      "properties": {
+        "SessionId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorDetails": {
+      "type": "object",
+      "properties": {
+        "Message": {
+          "type": "string",
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "HealthCheckResult": {
+      "type": "object",
+      "properties": {
+        "Ok": {
+          "type": "boolean"
+        },
+        "Error": {
+          "type": "string",
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "HealthStatus": {
+      "type": "object",
+      "properties": {
+        "Healthy": {
+          "type": "boolean"
+        },
+        "Database": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HealthCheckResult"
+            }
+          ],
+          "x-nullable": true
+        },
+        "OpenRouter": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/HealthCheckResult"
+            }
+          ],
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Message": {
+      "type": "object",
+      "properties": {
+        "Question": {
+          "type": "string",
+          "x-nullable": true
+        },
+        "Text": {
+          "type": "string",
+          "x-nullable": true
+        },
+        "RagCollections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-nullable": true
+        },
+        "RagDocuments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-nullable": true
+        },
+        "SourceDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-nullable": true
+        },
+        "RateDate": {
+          "type": "string",
+          "format": "date-time",
+          "x-nullable": true
+        },
+        "RateMin": {
+          "type": "integer",
+          "format": "int32",
+          "x-nullable": true
+        },
+        "RateMax": {
+          "type": "integer",
+          "format": "int32",
+          "x-nullable": true
+        },
+        "Rate": {
+          "type": "integer",
+          "format": "int32",
+          "x-nullable": true
+        },
+        "RagBased": {
+          "type": "boolean",
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostMessageRequest": {
+      "type": "object",
+      "required": [
+        "Message"
+      ],
+      "properties": {
+        "Message": {
+          "type": "string",
+          "description": "Сообщение пользователя",
+          "minLength": 1
+        },
+        "RemovePersonalData": {
+          "type": "boolean",
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostMessageResponse": {
+      "type": "object",
+      "description": "Ответ ИИ",
+      "properties": {
+        "SummaryHTML": {
+          "type": "string",
+          "description": "Ответ в формате HTML",
+          "x-nullable": true
+        },
+        "Summary": {
+          "type": "string",
+          "description": "Ответ в формате Markdown",
+          "x-nullable": true
+        },
+        "Notes": {
+          "type": "string",
+          "description": "Примечание",
+          "x-nullable": true
+        },
+        "Sources": {
+          "type": "array",
+          "description": "Используемые источники",
+          "items": {
+            "$ref": "#/definitions/PostMessageResponseSource"
+          },
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostMessageResponseSource": {
+      "type": "object",
+      "properties": {
+        "Title": {
+          "type": "string",
+          "x-nullable": true
+        },
+        "Url": {
+          "type": "string",
+          "x-nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "SessionItem": {
+      "type": "object",
+      "properties": {
+        "SessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Channel": {
+          "type": "string",
+          "x-nullable": true
+        },
+        "Created": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "UpdateChatRequest": {
+      "type": "object",
+      "required": [
+        "Title"
+      ],
+      "properties": {
+        "Title": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "securityDefinitions": {
+    "Bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "tags": [
+    {
+      "name": "Chat"
+    },
+    {
+      "name": "Health"
+    }
+  ]
+}
