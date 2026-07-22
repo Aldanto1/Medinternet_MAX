@@ -291,6 +291,7 @@ async def handle_ai_stream(request: web.Request) -> web.Response:
 
     queue: asyncio.Queue = asyncio.Queue()
     answer_parts: list = []   # копим текст ответа для генерации подсказок-продолжений
+    active = {"chat_row": None}   # id текущего чата (для истории переписки)
 
     async def feed(cid):
         async for kind, value in ai_client.stream_message(cid, message):
@@ -302,11 +303,19 @@ async def handle_ai_stream(request: web.Request) -> web.Response:
         try:
             chat_id = await db.get_ai_chat_id(uid)
             if not chat_id:
+                # Новый диалог -> новая RX-сессия и новый чат (title = вопрос)
                 chat_id = await ai_client.create_session(uid)
-                await db.set_ai_chat_id(uid, chat_id)
+                active["chat_row"] = await db.start_chat(uid, chat_id, message)
+            else:
+                active["chat_row"] = await db.get_active_chat(uid)
+                if not active["chat_row"]:   # legacy-сессия без чата
+                    active["chat_row"] = await db.start_chat(uid, chat_id, message)
+            if active["chat_row"]:
+                await db.add_chat_message(active["chat_row"], "user", message)
             try:
                 await feed(chat_id)
             except ai_client.SessionNotFound:
+                # RX-сессия истекла -> новая сессия, но чат тот же
                 chat_id = await ai_client.create_session(uid)
                 await db.set_ai_chat_id(uid, chat_id)
                 await feed(chat_id)
@@ -331,9 +340,15 @@ async def handle_ai_stream(request: web.Request) -> web.Response:
                 break
             kind, value = payload
             await emit({"kind": kind, "value": value})
+        answer_text = "".join(answer_parts).strip()
+        # Сохраняем ответ в историю чата
+        if answer_text and active["chat_row"]:
+            try:
+                await db.add_chat_message(active["chat_row"], "ai", answer_text)
+            except Exception as e:
+                logger.warning("Не удалось сохранить ответ в чат %s: %s", uid, e)
         # После ответа: подсказки-продолжения на основе Q&A (генерирует нейросеть
         # в отдельной сессии). Не критично — при ошибке/таймауте просто не шлём.
-        answer_text = "".join(answer_parts).strip()
         if answer_text:
             try:
                 sugg = await asyncio.wait_for(
@@ -375,6 +390,28 @@ async def handle_ai_feedback(request: web.Request) -> web.Response:
     except Exception as e:
         logger.warning("Не удалось сохранить оценку %s: %s", max_user["id"], e)
     return web.json_response({"ok": True})
+
+
+async def handle_chats_list(request: web.Request) -> web.Response:
+    """Список чатов пользователя (название = первый запрос). Только по запросу."""
+    max_user, _body, err = await _authenticated_user(request)
+    if err is not None:
+        return err
+    chats = await db.list_chats(max_user["id"])
+    return web.json_response({"ok": True, "chats": chats})
+
+
+async def handle_chat_messages(request: web.Request) -> web.Response:
+    """Сообщения выбранного чата (переписка) — для страницы просмотра."""
+    max_user, body, err = await _authenticated_user(request)
+    if err is not None:
+        return err
+    try:
+        chat_id = int(body.get("chat_id"))
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "error": "Неверный chat_id"}, status=400)
+    messages = await db.get_chat_messages(max_user["id"], chat_id)
+    return web.json_response({"ok": True, "messages": messages})
 
 
 def _file(name: str):
@@ -430,6 +467,7 @@ def build_app(client=None, bot_name: str = "") -> web.Application:
     app.router.add_get("/app.js", _file("app.js"))
     app.router.add_get("/style.css", _file("style.css"))
     app.router.add_get("/logo.png", _file("logo.png"))
+    app.router.add_get("/robot.png", _file("robot.png"))
     app.router.add_post("/api/register", handle_register)
     app.router.add_post("/api/me", handle_me)
     app.router.add_post("/api/logout", handle_logout)
@@ -437,6 +475,8 @@ def build_app(client=None, bot_name: str = "") -> web.Application:
     app.router.add_post("/api/ai/message/stream", handle_ai_stream)
     app.router.add_post("/api/ai/reset", handle_ai_reset)
     app.router.add_post("/api/ai/feedback", handle_ai_feedback)
+    app.router.add_post("/api/chats", handle_chats_list)
+    app.router.add_post("/api/chat/messages", handle_chat_messages)
 
     # CRM-панель рассылок под /crm (если заданы логин/пароль/JWT). Тот же сервис.
     if config.crm_enabled():

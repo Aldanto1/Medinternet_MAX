@@ -1,19 +1,11 @@
 // MAX WebApp SDK (MAX Bridge): глобальный объект window.WebApp.
-// По возможности сохраняем ту же логику, что и в Telegram-версии; методы,
-// которых может не быть в MAX (showAlert/showConfirm/colorScheme), вызываем
-// защищённо с браузерным фолбэком.
 const wa = window.WebApp;
 const initData = wa?.initData || "";
 
 const T = {
-    searcher: "Медицинский поисковик",
-    submit: "Зарегистрироваться",
-    submitting: "Отправка…",
     greet: "Здравствуйте! Задайте медицинский вопрос — я постараюсь помочь.",
     aiUnavailable: "Чат временно недоступен.",
     errGeneric: "Что-то пошло не так. Попробуйте позже.",
-    sources: "Источники:",
-    emptyAnswer: "Пустой ответ.",
 };
 
 const els = {
@@ -21,48 +13,41 @@ const els = {
     register: document.getElementById("screen-register"),
     app: document.getElementById("app"),
     registerBtn: document.getElementById("register-btn"),
+    // под-экраны
+    screenSearch: document.getElementById("screen-search"),
+    screenHistory: document.getElementById("screen-history"),
+    screenChat: document.getElementById("screen-chat"),
+    // поиск
     messages: document.getElementById("messages"),
     chatForm: document.getElementById("chat-form"),
     chatInput: document.getElementById("chat-input"),
     chatSend: document.getElementById("chat-send"),
     chatReset: document.getElementById("chat-reset"),
-    historyBtn: document.getElementById("history-btn"),
-    historyPanel: document.getElementById("history-panel"),
-    historyList: document.getElementById("history-list"),
-    historyClear: document.getElementById("history-clear"),
     promptChips: document.querySelector(".prompt-chips"),
+    // история
+    historyBtn: document.getElementById("history-btn"),
+    historyBack: document.getElementById("history-back"),
+    historyChats: document.getElementById("history-chats"),
+    // просмотр чата
+    chatviewBack: document.getElementById("chatview-back"),
+    chatviewTitle: document.getElementById("chatview-title"),
+    chatviewMessages: document.getElementById("chatview-messages"),
 };
 
-let state = { registered: false, aiEnabled: false, user: null, screen: "loading", tab: "search" };
+let state = { registered: false, aiEnabled: false, screen: "loading", sub: "search" };
 
-// ---------- Обёртки над MAX WebApp (с фолбэками) ----------
+// ---------- Обёртки над MAX WebApp ----------
 
 function waColorScheme() {
     if (wa?.colorScheme) return wa.colorScheme;
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark" : "light";
 }
-
-function waOpenLink(url) {
-    if (wa?.openLink) wa.openLink(url); else window.open(url, "_blank");
-}
-
+function waOpenLink(url) { if (wa?.openLink) wa.openLink(url); else window.open(url, "_blank"); }
 function waClose() { try { wa?.close?.(); } catch (e) { /* игнор */ } }
+function waHaptic(kind) { try { wa?.HapticFeedback?.impactOccurred?.(kind); } catch (e) { /* игнор */ } }
 
-function waAlert(msg) {
-    if (wa?.showAlert) wa.showAlert(msg); else alert(msg);
-}
-
-function waConfirm(msg, cb) {
-    if (wa?.showConfirm) wa.showConfirm(msg, cb);
-    else cb(confirm(msg));
-}
-
-function waHaptic(kind) {
-    try { wa?.HapticFeedback?.impactOccurred?.(kind); } catch (e) { /* игнор */ }
-}
-
-// ---------- Общее ----------
+// ---------- HTTP ----------
 
 async function api(path, extra = {}) {
     const res = await fetch(path, {
@@ -83,44 +68,38 @@ function applyTheme(theme) {
     const icon = theme === "dark" ? "☀️" : "🌙";
     document.querySelectorAll(".theme-toggle").forEach((b) => { b.textContent = icon; });
 }
-
 function initTheme() {
     let theme;
     try { theme = localStorage.getItem("mi_theme"); } catch (e) { theme = null; }
     if (!theme) theme = waColorScheme() === "dark" ? "dark" : "light";
     applyTheme(theme);
 }
-
 function toggleTheme() {
     const cur = document.documentElement.getAttribute("data-theme");
     applyTheme(cur === "dark" ? "light" : "dark");
 }
 
-// ---------- Экраны и вкладки ----------
+// ---------- Экраны ----------
 
 function showScreen(name) {
     state.screen = name;
     els.loading.hidden = name !== "loading";
     els.register.hidden = name !== "register";
     els.app.hidden = name !== "app";
-    wa?.BackButton?.hide?.();
 }
 
-function switchTab(name) {
-    state.tab = name;
-    document.getElementById("tab-search").hidden = name !== "search";
-    document.getElementById("tab-profile").hidden = name !== "profile";
-    document.getElementById("tab-info").hidden = name !== "info";
-    document.querySelectorAll(".nav-btn").forEach((b) => {
-        b.classList.toggle("active", b.dataset.tab === name);
-    });
-    if (name === "search" && !els.messages.querySelector(".bubble")) greetChat();
-    if (name === "profile") renderProfile();
+// Под-экраны внутри приложения: поиск / история / просмотр чата
+function showSub(name) {
+    state.sub = name;
+    els.screenSearch.hidden = name !== "search";
+    els.screenHistory.hidden = name !== "history";
+    els.screenChat.hidden = name !== "chat";
 }
 
 function openApp() {
     showScreen("app");
-    switchTab("search");
+    showSub("search");
+    greetChat();
 }
 
 // ---------- Инициализация ----------
@@ -132,64 +111,44 @@ async function init() {
         const me = await api("/api/me");
         state.registered = !!me.registered;
         state.aiEnabled = !!me.ai_enabled;
-        state.user = me.user || null;
     } catch (e) { /* дефолт: не зарегистрирован */ }
     if (state.registered) openApp(); else showScreen("register");
 }
 
 // ---------- Регистрация: переход на сайт ----------
 
-let pendingReg = false;   // ушли на страницу /link для регистрации
-
+let pendingReg = false;
 function openSite() {
     pendingReg = true;
-    const url = window.location.origin + "/link";
-    waOpenLink(url);
+    waOpenLink(window.location.origin + "/link");
 }
-
-// После ухода на страницу регистрации мини-апп больше не нужен: как только он
-// уходит в фон (открылся браузер/чат) — закрываем его. Пользователь откроет заново.
 function closeAfterSiteVisit() {
     if (!pendingReg) return;
     pendingReg = false;
     waClose();
 }
-
-document.addEventListener("visibilitychange", () => {
-    if (document.hidden) closeAfterSiteVisit();
-});
+document.addEventListener("visibilitychange", () => { if (document.hidden) closeAfterSiteVisit(); });
 window.addEventListener("blur", closeAfterSiteVisit);
-
-// ---------- Личный кабинет ----------
-
-function maxDisplayName() {
-    const u = wa?.initDataUnsafe?.user;
-    const name = u ? [u.first_name, u.last_name].filter(Boolean).join(" ") : "";
-    return name || "Пользователь";
-}
-
-function renderProfile() {
-    const u = state.user || {};
-    const name = maxDisplayName();
-    document.getElementById("pf-name").textContent = name;
-    document.getElementById("pf-initial").textContent = (name.trim()[0] || "?");
-    document.getElementById("pf-fio").textContent = u.full_name || "—";
-    document.getElementById("pf-specialty").textContent = u.specialty || "—";
-    document.getElementById("pf-position").textContent = u.position || "—";
-    const tariff = u.tariff || "Обычный";
-    document.getElementById("pf-tariff").textContent = tariff;
-    document.getElementById("pf-tariff-name").textContent = tariff;
-}
 
 // ---------- Чат ----------
 
 function greetChat() {
     if (els.messages.querySelector(".bubble")) return;   // уже есть сообщения
-    addBubble("ai", state.aiEnabled === false ? T.aiUnavailable : T.greet);
+    const row = document.createElement("div");
+    row.className = "greet-row";
+    const img = document.createElement("img");
+    img.className = "greet-avatar";
+    img.src = "/robot.png"; img.alt = "";
+    img.onerror = () => { img.style.display = "none"; };
+    const bub = document.createElement("div");
+    bub.className = "bubble ai";
+    bub.textContent = state.aiEnabled === false ? T.aiUnavailable : T.greet;
+    row.append(img, bub);
+    addToMessages(row);
+    scrollToBottom();
 }
 
-// Сообщения вставляем ПЕРЕД чипсами — так чипсы остаются последним элементом
-// внутри области сообщений (в скролле, «одним целым» с текстом ответа).
+// Сообщения вставляем ПЕРЕД чипсами — чипсы остаются последним элементом в скролле.
 function addToMessages(el) {
     if (els.promptChips && els.promptChips.parentNode === els.messages) {
         els.messages.insertBefore(el, els.promptChips);
@@ -218,7 +177,7 @@ function addTyping() {
 
 function scrollToBottom() { els.messages.scrollTop = els.messages.scrollHeight; }
 
-// ---------- Лёгкий рендер markdown (для потокового ответа) ----------
+// ---------- Лёгкий рендер markdown ----------
 
 function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -254,7 +213,6 @@ let sending = false;
 async function sendChat() {
     const text = els.chatInput.value.trim();
     if (!text || sending) return;
-    addHistory(text);
     sending = true;
     els.chatSend.disabled = true;
     els.chatInput.value = "";
@@ -262,9 +220,9 @@ async function sendChat() {
     addBubble("user", text);
     const typing = addTyping();
 
-    let bubble = null;       // пузырь ответа (создаётся при первом тексте)
-    let pending = "";        // незавершённая строка (копится, пока не придёт \n)
-    const lineQueue = [];    // готовые строки, ждущие плавного появления
+    let bubble = null;
+    let pending = "";
+    const lineQueue = [];
     let gotText = false;
     let streamDone = false;
     let animating = false;
@@ -283,7 +241,7 @@ async function sendChat() {
         finished = true;
         sending = false;
         els.chatSend.disabled = false;
-        if (bubble && gotText) addAnswerActions(bubble, text);   // копировать / оценка
+        if (bubble && gotText) addAnswerActions(bubble, text);
     }
 
     function enqueue(chunk) {
@@ -299,10 +257,7 @@ async function sendChat() {
 
     function pump() {
         if (animating) return;
-        if (!lineQueue.length) {
-            if (streamDone) finish();
-            return;
-        }
+        if (!lineQueue.length) { if (streamDone) finish(); return; }
         animating = true;
         ensureBubble();
         const ln = lineQueue.shift();
@@ -361,7 +316,7 @@ async function sendChat() {
     } finally {
         streamDone = true;
         if (gotText) {
-            if (pending.trim()) lineQueue.push(pending);   // остаток — последняя строка
+            if (pending.trim()) lineQueue.push(pending);
             pending = "";
             pump();
         } else {
@@ -374,10 +329,9 @@ async function sendChat() {
 async function resetChat() {
     if (sending) return;
     try { await api("/api/ai/reset"); } catch (e) { /* не критично */ }
-    // Удаляем сообщения, но оставляем чипсы (они часть области сообщений)
-    els.messages.querySelectorAll(".bubble").forEach((b) => b.remove());
-    greetChat();
+    els.messages.querySelectorAll(".bubble, .greet-row").forEach((b) => b.remove());
     renderStaticChips();   // новый чат — снова статичные подсказки
+    greetChat();
     waHaptic("light");
 }
 
@@ -405,8 +359,7 @@ function actBtn(kind, svg, title) {
 }
 
 function answerText(bubble) {
-    return Array.from(bubble.querySelectorAll(".ai-line"))
-        .map((el) => el.innerText).join("\n").trim();
+    return Array.from(bubble.querySelectorAll(".ai-line")).map((el) => el.innerText).join("\n").trim();
 }
 
 async function copyAnswer(bubble, btn) {
@@ -428,7 +381,7 @@ async function copyAnswer(bubble, btn) {
 function rate(question, value, btn, otherBtn) {
     const wasActive = btn.classList.contains("active");
     otherBtn.classList.remove("active");
-    if (wasActive) { btn.classList.remove("active"); return; }  // повторный клик — снять
+    if (wasActive) { btn.classList.remove("active"); return; }
     btn.classList.add("active");
     waHaptic("light");
     api("/api/ai/feedback", { message: question, rating: value }).catch(() => { /* не критично */ });
@@ -449,99 +402,8 @@ function addAnswerActions(bubble, question) {
     scrollToBottom();
 }
 
-// ---------- История запросов (в localStorage) ----------
+// ---------- Чипсы-подсказки ----------
 
-const HISTORY_KEY = "mi_history";
-const HISTORY_MAX = 30;
-
-function loadHistory() {
-    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
-    catch (e) { return []; }
-}
-function saveHistory(arr) {
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); } catch (e) { /* игнор */ }
-}
-function addHistory(q) {
-    q = (q || "").trim();
-    if (!q) return;
-    let arr = loadHistory().filter((x) => x !== q);
-    arr.unshift(q);
-    if (arr.length > HISTORY_MAX) arr = arr.slice(0, HISTORY_MAX);
-    saveHistory(arr);
-}
-function renderHistory() {
-    const list = els.historyList;
-    const arr = loadHistory();
-    list.innerHTML = "";
-    if (!arr.length) {
-        const empty = document.createElement("div");
-        empty.className = "history-empty";
-        empty.textContent = "Пока нет запросов";
-        list.appendChild(empty);
-        return;
-    }
-    arr.forEach((q) => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "history-item";
-        item.textContent = q;
-        item.title = q;
-        item.addEventListener("click", () => {
-            els.chatInput.value = q;
-            els.chatInput.focus();
-            const len = els.chatInput.value.length;
-            els.chatInput.setSelectionRange(len, len);
-            autoGrow();
-            hideHistory();
-        });
-        list.appendChild(item);
-    });
-}
-function toggleHistory() {
-    if (els.historyPanel.hidden) { renderHistory(); els.historyPanel.hidden = false; }
-    else els.historyPanel.hidden = true;
-}
-function hideHistory() { els.historyPanel.hidden = true; }
-function clearHistory() {
-    saveHistory([]);
-    renderHistory();
-    waHaptic("light");
-}
-
-// ---------- Информация ----------
-
-function comingSoon(what) {
-    waAlert(what + " — скоро будет доступно.");
-}
-
-function logout() {
-    waConfirm("Выйти из аккаунта?", async (ok) => {
-        if (!ok) return;
-        // Деактивируем аккаунт на сервере (данные сохраняются) — бот вернёт
-        // исходное сообщение с предложением зарегистрироваться заново.
-        try { await api("/api/logout"); } catch (e) { /* всё равно закрываем */ }
-        waClose();
-    });
-}
-
-// ---------- События ----------
-
-els.registerBtn.addEventListener("click", openSite);
-
-els.chatForm.addEventListener("submit", (e) => { e.preventDefault(); sendChat(); });
-els.chatReset.addEventListener("click", resetChat);
-els.chatInput.addEventListener("input", autoGrow);
-els.chatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
-});
-document.querySelectorAll(".theme-toggle").forEach((b) => b.addEventListener("click", toggleTheme));
-
-document.querySelectorAll(".nav-btn").forEach((b) => {
-    b.addEventListener("click", () => switchTab(b.dataset.tab));
-});
-
-// Чипсы-подсказки: до первого вопроса — статичные (вставляют начало запроса),
-// после ответа — динамические уточняющие вопросы от нейросети (вставляют вопрос целиком).
 const STATIC_CHIPS = [
     { label: "Клинические рекомендации по…", insert: "Клинические рекомендации по " },
     { label: "Инструкция по применению…", insert: "Инструкция по применению " },
@@ -553,7 +415,7 @@ function chipInsert(text) {
     box.value = text;
     box.focus();
     const len = box.value.length;
-    box.setSelectionRange(len, len);   // курсор в конец
+    box.setSelectionRange(len, len);
     autoGrow();
 }
 
@@ -572,27 +434,80 @@ function renderChips(items) {
     });
     scrollToBottom();
 }
-
 function renderStaticChips() { renderChips(STATIC_CHIPS); }
 
-renderStaticChips();   // стартовое состояние — статичные подсказки
+// ---------- История: список чатов и просмотр переписки (серверная) ----------
 
-// История запросов
-els.historyBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleHistory(); });
-els.historyClear.addEventListener("click", clearHistory);
-document.addEventListener("click", (e) => {
-    if (els.historyPanel.hidden) return;
-    if (els.historyPanel.contains(e.target) || els.historyBtn.contains(e.target)) return;
-    hideHistory();   // клик вне панели — закрыть
+async function openHistoryPage() {
+    // История НЕ грузится при старте — запрос только сейчас, по нажатию кнопки.
+    showSub("history");
+    els.historyChats.innerHTML = '<div class="history-empty">Загрузка…</div>';
+    try {
+        const data = await api("/api/chats");
+        renderChatList(data.chats || []);
+    } catch (e) {
+        els.historyChats.innerHTML = '<div class="history-empty">Не удалось загрузить</div>';
+    }
+}
+
+function renderChatList(chats) {
+    const box = els.historyChats;
+    box.innerHTML = "";
+    if (!chats.length) {
+        box.innerHTML = '<div class="history-empty">Пока нет чатов</div>';
+        return;
+    }
+    chats.forEach((c) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "chat-item";
+        item.textContent = c.title || "Без названия";
+        item.title = c.title || "";
+        item.addEventListener("click", () => openChatView(c));
+        box.appendChild(item);
+    });
+}
+
+async function openChatView(chat) {
+    showSub("chat");
+    els.chatviewTitle.textContent = chat.title || "Чат";
+    els.chatviewMessages.innerHTML = '<div class="history-empty">Загрузка…</div>';
+    try {
+        const data = await api("/api/chat/messages", { chat_id: chat.id });
+        renderChatMessages(data.messages || []);
+    } catch (e) {
+        els.chatviewMessages.innerHTML = '<div class="history-empty">Не удалось загрузить</div>';
+    }
+}
+
+function renderChatMessages(messages) {
+    const box = els.chatviewMessages;
+    box.innerHTML = "";
+    messages.forEach((m) => {
+        const el = document.createElement("div");
+        el.className = "bubble " + (m.role === "user" ? "user" : "ai");
+        if (m.role === "user") el.textContent = m.content || "";
+        else { el.style.whiteSpace = "normal"; el.innerHTML = mdToHtml(m.content || ""); }
+        box.appendChild(el);
+    });
+    box.scrollTop = 0;
+}
+
+// ---------- События ----------
+
+els.registerBtn.addEventListener("click", openSite);
+
+els.chatForm.addEventListener("submit", (e) => { e.preventDefault(); sendChat(); });
+els.chatReset.addEventListener("click", resetChat);
+els.chatInput.addEventListener("input", autoGrow);
+els.chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
+document.querySelectorAll(".theme-toggle").forEach((b) => b.addEventListener("click", toggleTheme));
 
-document.getElementById("upgrade-btn").addEventListener("click", () => comingSoon("Тариф «Плюс»"));
-document.getElementById("logout-btn").addEventListener("click", logout);
+els.historyBtn.addEventListener("click", openHistoryPage);
+els.historyBack.addEventListener("click", () => showSub("search"));
+els.chatviewBack.addEventListener("click", () => showSub("history"));
 
-// Модалка «Как пользоваться»
-const howtoModal = document.getElementById("howto-modal");
-document.getElementById("howto-btn").addEventListener("click", () => { howtoModal.hidden = false; });
-document.getElementById("howto-close").addEventListener("click", () => { howtoModal.hidden = true; });
-howtoModal.addEventListener("click", (e) => { if (e.target === howtoModal) howtoModal.hidden = true; });
-
+renderStaticChips();   // стартовое состояние — статичные подсказки
 init();

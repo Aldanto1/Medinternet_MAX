@@ -72,6 +72,37 @@ async def init() -> None:
             )
             """
         )
+        # Ссылка на текущий «чат» пользователя (см. таблицу chats).
+        await conn.execute("ALTER TABLE ai_sessions ADD COLUMN IF NOT EXISTS chat_row_id BIGINT")
+        # История переписки: чаты пользователя и их сообщения.
+        # Название чата = первый запрос пользователя (title).
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chats (
+                id          BIGSERIAL PRIMARY KEY,
+                telegram_id BIGINT NOT NULL,
+                title       TEXT,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chats_user ON chats (telegram_id, created_at DESC)"
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id         BIGSERIAL PRIMARY KEY,
+                chat_id    BIGINT NOT NULL,
+                role       TEXT NOT NULL,   -- user / ai
+                content    TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_messages ON chat_messages (chat_id, id)"
+        )
         # Стартовое сообщение бота (с приглашением зарегистрироваться) —
         # чтобы удалить его после успешной регистрации.
         await conn.execute(
@@ -290,6 +321,84 @@ async def clear_ai_session(telegram_id: int) -> None:
         await conn.execute(
             "DELETE FROM ai_sessions WHERE telegram_id = $1", telegram_id
         )
+
+
+async def start_chat(telegram_id: int, rx_chat_id: str, title: str) -> int:
+    """Создаёт новый чат (title = первый запрос) и делает его активным.
+
+    Возвращает id созданного чата (chat_row_id). RX-сессия привязывается к чату
+    через ai_sessions.chat_row_id.
+    """
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        chat_row_id = await conn.fetchval(
+            "INSERT INTO chats (telegram_id, title) VALUES ($1, $2) RETURNING id",
+            telegram_id, (title or "")[:200],
+        )
+        await conn.execute(
+            """
+            INSERT INTO ai_sessions (telegram_id, chat_id, chat_row_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (telegram_id) DO UPDATE SET
+                chat_id     = EXCLUDED.chat_id,
+                chat_row_id = EXCLUDED.chat_row_id,
+                created_at  = now()
+            """,
+            telegram_id, rx_chat_id, chat_row_id,
+        )
+    return chat_row_id
+
+
+async def get_active_chat(telegram_id: int) -> int | None:
+    """id текущего чата пользователя (или None)."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT chat_row_id FROM ai_sessions WHERE telegram_id = $1", telegram_id
+        )
+
+
+async def add_chat_message(chat_row_id: int, role: str, content: str) -> None:
+    """Добавляет сообщение (user/ai) в чат."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO chat_messages (chat_id, role, content) VALUES ($1, $2, $3)",
+            chat_row_id, role, content,
+        )
+
+
+async def list_chats(telegram_id: int, limit: int = 100) -> list[dict]:
+    """Список чатов пользователя (новые сверху): id, название, дата."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, title, created_at FROM chats "
+            "WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT $2",
+            telegram_id, limit,
+        )
+    return [
+        {"id": r["id"], "title": r["title"],
+         "created_at": r["created_at"].isoformat() if r["created_at"] else None}
+        for r in rows
+    ]
+
+
+async def get_chat_messages(telegram_id: int, chat_row_id: int) -> list[dict]:
+    """Сообщения чата (проверяя, что чат принадлежит пользователю)."""
+    assert _pool is not None, "db.init() ещё не вызван"
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT m.role, m.content
+            FROM chat_messages m
+            JOIN chats c ON c.id = m.chat_id
+            WHERE m.chat_id = $1 AND c.telegram_id = $2
+            ORDER BY m.id
+            """,
+            chat_row_id, telegram_id,
+        )
+    return [{"role": r["role"], "content": r["content"]} for r in rows]
 
 
 async def add_ai_feedback(telegram_id: int, question: str, rating: str) -> None:
