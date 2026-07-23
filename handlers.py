@@ -324,6 +324,13 @@ async def _on_message(update: dict) -> None:
 
 async def _register_via_link(chat_id: int, user_id: int, display_name: str, token: str) -> None:
     """Регистрация по одноразовой подписанной ссылке из личного кабинета."""
+    # Убираем прежнее (до-регистрационное) главное сообщение, чтобы в чате не
+    # осталось двух: старое удаляем перед показом сообщения о регистрации.
+    prev_main = await db.get_main_message(user_id)
+    if prev_main:
+        await _safe_delete(prev_main)
+        await db.clear_main_message(user_id)
+
     if await db.user_exists(user_id):
         await _client.send_message(
             chat_id=chat_id, text="Вы уже зарегистрированы ✅", fmt="html",
