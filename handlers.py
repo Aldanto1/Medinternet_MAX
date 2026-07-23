@@ -156,8 +156,8 @@ def _partners_keyboard() -> dict:
     link = bot_link()
     invite = "Присоединяйтесь к Мединтернету — медицинскому ИИ-поисковику для врачей и фармацевтов:"
     tg_share = f"https://t.me/share/url?url={quote(link)}&text={quote(invite)}"
-    # ⚠️ Схема share-ссылки MAX требует проверки; при необходимости поправить URL.
-    max_share = f"https://max.ru/share/url?url={quote(link)}&text={quote(invite)}"
+    # Диплинк MAX «Отправить в MAX»: параметр только text — ссылку вшиваем в текст.
+    max_share = f"https://max.ru/:share?text={quote(invite + ' ' + link)}"
     wa_share = f"https://wa.me/?text={quote(invite + ' ' + link)}"
     return _keyboard([
         # В MAX есть тип кнопки clipboard — копирует payload в буфер обмена.
