@@ -307,6 +307,12 @@ async function sendChat() {
                     if (Array.isArray(obj.value) && obj.value.length) {
                         renderChips(obj.value.map((q) => ({ label: q, insert: q })));
                     }
+                } else if (obj.kind === "answer_ref") {
+                    // id ответа в RX Code AI — чтобы лайк/дизлайк ушли в их API
+                    if (bubble && obj.value) {
+                        bubble.dataset.rxChat = obj.value.chat_id || "";
+                        bubble.dataset.rxMsg = obj.value.message_id || "";
+                    }
                 }
             }
         }
@@ -378,13 +384,19 @@ async function copyAnswer(bubble, btn) {
     setTimeout(() => btn.classList.remove("copied"), 1200);
 }
 
-function rate(question, value, btn, otherBtn) {
+function rate(bubble, question, value, btn, otherBtn) {
     const wasActive = btn.classList.contains("active");
     otherBtn.classList.remove("active");
     if (wasActive) { btn.classList.remove("active"); return; }
     btn.classList.add("active");
     waHaptic("light");
-    api("/api/ai/feedback", { message: question, rating: value }).catch(() => { /* не критично */ });
+    const payload = { message: question, rating: value };
+    // Если знаем id ответа в RX Code AI — оценка уйдёт и в их API
+    if (bubble && bubble.dataset.rxChat && bubble.dataset.rxMsg) {
+        payload.chat_id = bubble.dataset.rxChat;
+        payload.message_id = bubble.dataset.rxMsg;
+    }
+    api("/api/ai/feedback", payload).catch(() => { /* не критично */ });
 }
 
 function addAnswerActions(bubble, question) {
@@ -395,8 +407,8 @@ function addAnswerActions(bubble, question) {
     copyBtn.addEventListener("click", () => copyAnswer(bubble, copyBtn));
     const likeBtn = actBtn("like", ICONS.like, "Полезный ответ");
     const dislikeBtn = actBtn("dislike", ICONS.like, "Ответ не помог");  // перевёрнутый лайк (CSS)
-    likeBtn.addEventListener("click", () => rate(question, "like", likeBtn, dislikeBtn));
-    dislikeBtn.addEventListener("click", () => rate(question, "dislike", dislikeBtn, likeBtn));
+    likeBtn.addEventListener("click", () => rate(bubble, question, "like", likeBtn, dislikeBtn));
+    dislikeBtn.addEventListener("click", () => rate(bubble, question, "dislike", dislikeBtn, likeBtn));
     bar.append(copyBtn, likeBtn, dislikeBtn);
     bubble.appendChild(bar);
     scrollToBottom();

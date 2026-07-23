@@ -119,7 +119,7 @@ Mini app API (POST, тело содержит `initData`):
 | `POST /api/ai/message` | Ответ ИИ (не потоковый; в mini app не используется) |
 | `POST /api/ai/message/stream` | Потоковый ответ (SSE): `text`/`action`/`suggestions`/`done` |
 | `POST /api/ai/reset` | Сброс текущей сессии (новый чат) |
-| `POST /api/ai/feedback` | Оценка ответа (like/dislike) → таблица `ai_feedback` |
+| `POST /api/ai/feedback` | Оценка ответа: таблица `ai_feedback` + отправка в RX Code AI (§10) |
 | `POST /api/chats` | Список чатов пользователя (для истории) |
 | `POST /api/chat/messages` | Сообщения выбранного чата |
 
@@ -215,24 +215,28 @@ CRM-панель после деплоя: `https://<домен>/crm/`.
 | `POST /api/chats` | `{ UserId, Channel }` | `{ SessionId }` | `ai_client.create_session` |
 | `POST /api/chats/{chatId}/messages` | `{ Message, RemovePersonalData? }` | `{ SummaryHTML, Summary, Notes, Sources[] }` | `ai_client.send_message` |
 | `POST /api/chats/{chatId}/messages/stream` | `{ Message }` | поток строк `data: {Text|Action}` | `ai_client.stream_message` |
+| `GET /api/chats/{chatId}/messages` | — | `ChatMessageItem[]` | `ai_client.list_messages` / `last_ai_message_id` |
+| `POST /api/chats/{chatId}/messages/{messageId}/like` \| `/dislike` | — | — | `ai_client.rate_message` |
 
 `Sources[]` = `{ Title, Url }`. Ответ: `Summary` (Markdown) / `SummaryHTML` (HTML).
+`ChatMessageItem` = `Id`, `Direction` (0=пользователь, 1=ИИ), `Text`, `Question`,
+`Sources`, `Created`, `Rate`, `RagBased`.
+
+### Как работает оценка ответа (лайк/дизлайк)
+1. После ответа сервер запрашивает `GET /api/chats/{chatId}/messages` и берёт `Id`
+   последнего сообщения с `Direction == 1` (`ai_client.last_ai_message_id`).
+2. Этот `Id` вместе с id сессии уходит в mini app SSE-событием `answer_ref`;
+   фронт кладёт их в `dataset` пузыря ответа.
+3. При нажатии лайка/дизлайка mini app шлёт `POST /api/ai/feedback`
+   с `chat_id`/`message_id`; бэкенд пишет оценку в таблицу `ai_feedback` **и**
+   вызывает `POST /api/chats/{chatId}/messages/{messageId}/like|dislike` в RX Code AI.
+4. Всё best-effort: если `Id` получить не удалось, оценка сохраняется только у нас.
 
 ### Доступные, но пока НЕ используемые эндпоинты
 - `GET /api/chats?userId=` — список сессий пользователя (`SessionItem`).
 - `PATCH /api/chats/{id}` — изменить `Title` сессии.
-- `GET /api/chats/{chatId}/messages` — список сообщений (`ChatMessageItem`:
-  `Id`, `Direction` 0=пользователь/1=ИИ, `Text`, `Question`, `Sources`, `Created`,
-  `Rate`, `RagBased`).
 - `GET /api/chats/{chatId}/messages/count` — число сообщений.
-- `POST /api/chats/{chatId}/messages/{messageId}/like` и `/dislike` — **нативная
-  оценка сообщения** в RX Code AI.
 - `GET /api/health` — статус сервиса (`Healthy`, `Database`, `OpenRouter`).
-
-> Примечание: сейчас лайк/дизлайк в mini app сохраняются в нашей таблице
-> `ai_feedback`. RX Code AI имеет собственные эндпоинты `.../like|dislike` —
-> в перспективе оценку можно отправлять напрямую в нейросеть (нужно хранить
-> `messageId` ответа RX Code AI).
 
 ### Как устроен поток ответа
 `stream_message` читает построчно `data: {...}` и отдаёт кортежи:

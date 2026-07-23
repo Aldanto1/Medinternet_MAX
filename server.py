@@ -347,6 +347,16 @@ async def handle_ai_stream(request: web.Request) -> web.Response:
                 await db.add_chat_message(active["chat_row"], "ai", answer_text)
             except Exception as e:
                 logger.warning("Не удалось сохранить ответ в чат %s: %s", uid, e)
+        # Ссылка на ответ в RX Code AI — чтобы лайк/дизлайк уходили в их API
+        if answer_text:
+            try:
+                rx_chat = await db.get_ai_chat_id(uid)
+                rx_msg = await ai_client.last_ai_message_id(rx_chat) if rx_chat else None
+                if rx_chat and rx_msg:
+                    await emit({"kind": "answer_ref",
+                                "value": {"chat_id": rx_chat, "message_id": rx_msg}})
+            except Exception as e:
+                logger.info("Не удалось определить id ответа ИИ %s: %s", uid, e)
         # После ответа: подсказки-продолжения на основе Q&A (генерирует нейросеть
         # в отдельной сессии). Не критично — при ошибке/таймауте просто не шлём.
         if answer_text:
@@ -389,6 +399,16 @@ async def handle_ai_feedback(request: web.Request) -> web.Response:
         await db.add_ai_feedback(max_user["id"], question, rating)
     except Exception as e:
         logger.warning("Не удалось сохранить оценку %s: %s", max_user["id"], e)
+
+    # Отправляем оценку в RX Code AI (если известен id ответа). Не критично:
+    # при ошибке оценка всё равно сохранена у нас.
+    rx_chat = (body.get("chat_id") or "").strip()
+    rx_msg = (body.get("message_id") or "").strip()
+    if rx_chat and rx_msg:
+        try:
+            await ai_client.rate_message(rx_chat, rx_msg, rating)
+        except Exception as e:
+            logger.warning("Не удалось отправить оценку в RX Code AI: %s", e)
     return web.json_response({"ok": True})
 
 

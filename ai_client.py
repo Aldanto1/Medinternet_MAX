@@ -115,6 +115,46 @@ async def stream_message(chat_id: str, message: str):
                     yield ("action", obj["Action"])
 
 
+async def list_messages(chat_id: str) -> list:
+    """GET /api/chats/{chatId}/messages — список сообщений сессии (ChatMessageItem)."""
+    url = f"{NEURO_API_URL}/api/chats/{chat_id}/messages"
+    async with aiohttp.ClientSession(timeout=_SESSION_TIMEOUT) as session:
+        async with session.get(url, headers=_headers()) as resp:
+            if resp.status == 404:
+                raise SessionNotFound()
+            if resp.status != 200:
+                text = await resp.text()
+                raise AIError(f"list_messages HTTP {resp.status}: {text[:200]}")
+            return await resp.json()
+
+
+async def last_ai_message_id(chat_id: str) -> str | None:
+    """Id последнего ответа ИИ в сессии (Direction == 1) — для лайка/дизлайка.
+
+    Best-effort: при любой ошибке возвращает None (оценка тогда уйдёт только в нашу БД).
+    """
+    try:
+        items = await list_messages(chat_id)
+    except Exception as e:
+        logger.info("Не удалось получить сообщения сессии %s: %s", chat_id, e)
+        return None
+    for item in reversed(items or []):
+        if item.get("Direction") == 1 and item.get("Id"):
+            return str(item["Id"])
+    return None
+
+
+async def rate_message(chat_id: str, message_id: str, rating: str) -> None:
+    """Оценка ответа в RX Code AI: POST /api/chats/{chatId}/messages/{id}/like|dislike."""
+    action = "like" if rating == "like" else "dislike"
+    url = f"{NEURO_API_URL}/api/chats/{chat_id}/messages/{message_id}/{action}"
+    async with aiohttp.ClientSession(timeout=_SESSION_TIMEOUT) as session:
+        async with session.post(url, headers=_headers()) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                raise AIError(f"rate_message HTTP {resp.status}: {text[:200]}")
+
+
 def _parse_followups(text: str) -> list[str]:
     """Разбирает ответ ИИ в список из ≤3 коротких вопросов (по строкам)."""
     out: list[str] = []
