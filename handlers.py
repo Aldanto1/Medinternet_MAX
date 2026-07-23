@@ -152,14 +152,19 @@ def _back_keyboard() -> dict:
 
 
 def _partners_keyboard() -> dict:
-    """Кнопки шеринга приглашения + возврат."""
+    """Кнопки шеринга приглашения (5 штук в фиксированном порядке) + возврат."""
     link = bot_link()
     invite = "Присоединяйтесь к Мединтернету — медицинскому ИИ-поисковику для врачей и фармацевтов:"
+    tg_share = f"https://t.me/share/url?url={quote(link)}&text={quote(invite)}"
+    # ⚠️ Схема share-ссылки MAX требует проверки; при необходимости поправить URL.
+    max_share = f"https://max.ru/share/url?url={quote(link)}&text={quote(invite)}"
     wa_share = f"https://wa.me/?text={quote(invite + ' ' + link)}"
     return _keyboard([
         # В MAX есть тип кнопки clipboard — копирует payload в буфер обмена.
         [{"type": "clipboard", "text": "🔗 Скопировать ссылку", "payload": link}],
-        [_btn_link("💬 Отправить в WhatsApp", wa_share)],
+        [_btn_link("✈️ Поделиться в Telegram", tg_share)],
+        [_btn_link("🔷 Поделиться в MAX", max_share)],
+        [_btn_link("💬 Поделиться в WhatsApp", wa_share)],
         [_btn_callback("← Вернуться", "nav:home")],
     ])
 
