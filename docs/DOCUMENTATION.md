@@ -72,12 +72,17 @@ CRM-панель /crm  ──HTTPS──> server.py ──> crm.py ──> db (N
   «📄 Политика конфиденциальности», «🔍 Открыть Mini App».
 - Открытие мини-аппа — кнопка-ссылка `https://max.ru/<botName>?startapp` (MAX
   открывает зарегистрированное в кабинете приложение нативно).
+- Раздел «Поделиться с другом» — 5 кнопок в фиксированном порядке:
+  копировать ссылку (`clipboard`), поделиться в Telegram (`t.me/share/url`),
+  в MAX (диплинк «Отправить в MAX» — `https://max.ru/:share?text=…`, только
+  параметр `text`, ссылку вшиваем в текст), в WhatsApp (`wa.me`), «Вернуться».
 - Навигация по разделам — callback-кнопки (`nav:partners`, `nav:instruction`,
   `nav:home`); подтверждение нажатия — best-effort (ошибка ack не ломает переход).
 - Регистрация:
   - **deep-link**: `bot_started` с `payload` (одноразовый подписанный токен из
     `link_token.py`, гасится в таблице `link_tokens`);
-  - после регистрации бот шлёт поздравление и кнопку Mini App.
+  - при регистрации прежнее (до-регистрационное) главное сообщение удаляется,
+    затем бот шлёт поздравление и кнопку Mini App.
 - **Апдейты, которые ловим:** `bot_started`, `message_created` (`/start`, `/help`),
   `message_callback`. Учёт активности: `db.touch_bot_action` на любой апдейт.
 
@@ -171,6 +176,8 @@ DELETE FROM main_messages; DELETE FROM users;
 | `NEURO_CHANNEL` | Канал RX Code AI (по умолчанию `michat`) |
 | `JWT_SECRET`, `CRM_LOGIN_EMAIL`, `CRM_LOGIN_PASSWORD` | Включают CRM-панель `/crm` |
 | `SEND_RATE_PER_SEC` | Троттлинг рассылки (по умолчанию 25/сек) |
+| `WEBAPP_HOST` | Интерфейс прослушивания (по умолчанию `0.0.0.0`) |
+| `API_SERVER_URL`, `API_SERVER_KEY` | Зарезервированы под API сайта medinternet (пока не используются) |
 | `SKIP_INITDATA_CHECK` | `1` — обход проверки подписи (только отладка!) |
 
 ---
